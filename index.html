@@ -300,7 +300,11 @@ function staticReasons(w,s){
   if(w.days&&w.days.length&&w.days.indexOf(dow(s.date))<0)r.push('Only works '+w.days.slice().sort(function(a,b){return ((a+6)%7)-((b+6)%7)}).map(function(d){return DOW[d]}).join(', '));
   if(w.daytimeOnly&&!s.daytime)r.push('Daytime only (8:30am to 8:30pm)');
   if(w.onlyShort&&!s.short)r.push('4-hour shifts only');
-  if((w.only12||w.only16)&&!((w.only12&&s.hours===12)||(w.only16&&s.hours===16)))r.push(w.only12&&w.only16?'12 or 16-hour shifts only':(w.only16?'16-hour shifts only':'12-hour shifts only'));
+  var d12=!!(w.only12day||w.only12),n12=!!(w.only12night||w.only12),l16=!!w.only16;
+  if(d12||n12||l16){
+    var okLong=(d12&&s.hours===12&&s.daytime)||(n12&&s.hours===12&&!s.daytime)||(l16&&s.hours===16);
+    if(!okLong){var parts=[];if(d12)parts.push('12-hour day');if(n12)parts.push('12-hour night');if(l16)parts.push('16-hour');r.push('Only works '+parts.join(' or ')+' shifts')}
+  }
   return r;
 }
 function pairReason(a,b,lv){
@@ -487,7 +491,7 @@ function hueR(wid){var k=S.roster.workers.findIndex(function(w){return w.id===wi
 function chipsFor(w){
   var c=[];
   if(w.onlyShort)c.push('4h shifts only');
-  if(w.only12&&w.only16)c.push('12h or 16h shifts only');else if(w.only16)c.push('16h shifts only');else if(w.only12)c.push('12h shifts only');
+  var cp=[];if(w.only12day||w.only12)cp.push('12h day');if(w.only12night||w.only12)cp.push('12h night');if(w.only16)cp.push('16h');if(cp.length)c.push(cp.join(' or ')+' shifts only');
   if(w.days&&w.days.length&&w.days.length<7)c.push(w.days.slice().sort(function(a,b){return ((a+6)%7)-((b+6)%7)}).map(function(d){return DOW[d]}).join(' '));
   if(w.daytimeOnly)c.push('8:30am–8:30pm only');
   if(w.maxHours>0)c.push('Max '+w.maxHours+'h');
@@ -722,9 +726,10 @@ function workerModalHTML(){
   var h='<div><h2>'+(m.id?'Edit scientist':'Add a scientist')+'</h2></div>';
   h+='<div class="field"><label for="wname">Name</label><input type="text" id="wname" data-bind="wname" value="'+esc(d.name)+'" autocomplete="off" data-autofocus></div>';
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-short"'+(d.onlyShort?' checked':'')+'>Only 4-hour shifts</label>';
-  h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-12"'+(d.only12?' checked':'')+'>Only 12-hour shifts (weekend and holiday day or night)</label>';
+  h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-12d"'+(d.only12day?' checked':'')+'>Only 12-hour day shifts (8:30 AM to 8:30 PM, weekends and holidays)</label>';
+  h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-12n"'+(d.only12night?' checked':'')+'>Only 12-hour night shifts (8:30 PM to 8:30 AM, weekends and holidays)</label>';
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-16"'+(d.only16?' checked':'')+'>Only 16-hour shifts (weekday overnight)</label>';
-  h+='<span class="note">Tick both 12-hour and 16-hour to allow long shifts only. These cannot be combined with 4-hour only.</span>';
+  h+='<span class="note">Tick more than one to allow several long-shift types. These cannot be combined with 4-hour only.</span>';
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-day"'+(d.daytimeOnly?' checked':'')+'>Only between 8:30am and 8:30pm</label>';
   h+='<div class="field" style="max-width:14rem"><label for="wmax">Maximum hours per period</label><input type="text" inputmode="numeric" id="wmax" data-bind="wmax" value="'+esc(d.maxHours)+'" placeholder="No limit" autocomplete="off"></div>';
   h+='<div><div class="lbl" style="margin-bottom:.35rem" id="dp-l">Can work on</div><div class="daypick" role="group" aria-labelledby="dp-l">'+order.map(function(x){return '<button type="button" data-act="wk-day" data-d="'+x+'" aria-pressed="'+(d.days.indexOf(x)>=0)+'">'+DOW[x]+'</button>'}).join('')+'</div></div>';
@@ -767,7 +772,7 @@ function setTab(t){
 function buildPeriod(){
   var d=S.draft,old=cur(),pid=S.pid;
   var workers=S.roster.workers.filter(function(w){return d.avail.indexOf(w.id)>=0}).map(function(w){
-    return {id:w.id,name:w.name,onlyShort:!!w.onlyShort,only12:!!w.only12,only16:!!w.only16,days:w.days&&w.days.length&&w.days.length<7?w.days.slice():null,daytimeOnly:!!w.daytimeOnly,maxHours:w.maxHours>0?w.maxHours:null,daysOff:(d.daysOff[w.id]||[]).slice().sort()};
+    return {id:w.id,name:w.name,onlyShort:!!w.onlyShort,only12day:!!(w.only12day||w.only12),only12night:!!(w.only12night||w.only12),only16:!!w.only16,days:w.days&&w.days.length&&w.days.length<7?w.days.slice():null,daytimeOnly:!!w.daytimeOnly,maxHours:w.maxHours>0?w.maxHours:null,daysOff:(d.daysOff[w.id]||[]).slice().sort()};
   });
   if(!workers.length){toast('Tick at least one available person first.');return}
   var p={id:pid,start:periodStart(pid),end:periodEnd(pid),workers:workers,
@@ -921,7 +926,7 @@ function renderGate(){
 async function sendApprovalEmail(name,email,code){
   var c=CONFIG.emailjs;
   var r=await fetch('https://api.emailjs.com/api/v1.0/email/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service_id:c.serviceId,template_id:c.templateId,user_id:c.publicKey,template_params:{to_email:CONFIG.approverEmail,requester_name:name,requester_email:email,code:code,expires_minutes:CONFIG.codeMinutes}})});
-  if(!r.ok)throw new Error('mail');
+  if(!r.ok){var t='';try{t=await r.text()}catch(e){}throw new Error(r.status+' '+t)}
 }
 function ghToken(){try{return localStorage.getItem('benchrota:ghtoken')||''}catch(e){return ''}}
 function b64(x){return btoa(unescape(encodeURIComponent(x)))}
@@ -1040,7 +1045,7 @@ var ACT={
       S.pending={name:nm,email:em,salt:salt,hash:await sha(salt+code),exp:Date.now()+CONFIG.codeMinutes*60000,tries:0};
       await persist('settings/pending',S.pending);
       S.gate='verify';S.gateInfo='A code was emailed to the approver. Ask them for it. It expires in '+CONFIG.codeMinutes+' minutes.';render();
-    }catch(e){S.gateErr='The email could not be sent. Check the email settings and try again.';render()}
+    }catch(e){S.gateErr='The email could not be sent ('+((e&&e.message)?String(e.message).slice(0,180):'unknown error')+'). Check the EmailJS settings and try again.';render()}
   },
   'verify-code':async function(){
     var code=pwv('vc').trim().toUpperCase().replace(/\s+/g,''),a=pwv('pw1'),b=pwv('pw2'),pd=S.pending;
@@ -1087,10 +1092,10 @@ var ACT={
   'close-modal':closeModal,
   assign:function(el){assign(el.dataset.id)},
   unassign:function(){var p=cur();delete p.slots[S.modal.key];savePeriod(p);closeModal();render()},
-  'new-worker':function(){S.modal={type:'worker',id:null,draft:{name:'',onlyShort:false,only12:false,only16:false,daytimeOnly:false,maxHours:'',days:[0,1,2,3,4,5,6]}};renderModal()},
+  'new-worker':function(){S.modal={type:'worker',id:null,draft:{name:'',onlyShort:false,only12day:false,only12night:false,only16:false,daytimeOnly:false,maxHours:'',days:[0,1,2,3,4,5,6]}};renderModal()},
   'edit-worker':function(el){
     var w=S.roster.workers.filter(function(x){return x.id===el.dataset.id})[0];if(!w)return;
-    S.modal={type:'worker',id:w.id,draft:{name:w.name,onlyShort:!!w.onlyShort,only12:!!w.only12,only16:!!w.only16,daytimeOnly:!!w.daytimeOnly,maxHours:w.maxHours>0?String(w.maxHours):'',days:w.days&&w.days.length?w.days.slice():[0,1,2,3,4,5,6]}};renderModal();
+    S.modal={type:'worker',id:w.id,draft:{name:w.name,onlyShort:!!w.onlyShort,only12day:!!(w.only12day||w.only12),only12night:!!(w.only12night||w.only12),only16:!!w.only16,daytimeOnly:!!w.daytimeOnly,maxHours:w.maxHours>0?String(w.maxHours):'',days:w.days&&w.days.length?w.days.slice():[0,1,2,3,4,5,6]}};renderModal();
   },
   'wk-day':function(el){
     var d=S.modal.draft,x=Number(el.dataset.d),i=d.days.indexOf(x);
@@ -1101,11 +1106,11 @@ var ACT={
     var m=S.modal,d=m.draft,name=d.name.trim();
     if(!name){m.err='Enter a name.';renderModal();return}
     if(!d.days.length){m.err='Choose at least one day this person can work.';renderModal();return}
-    if(d.daytimeOnly&&d.only16&&!d.only12){m.err='16-hour shifts run overnight, so they cannot be combined with daytime only.';renderModal();return}
-    if(d.only16&&!d.only12&&!d.days.some(function(x){return x>=1&&x<=5})){m.err='16-hour shifts only happen Monday to Friday, so choose at least one weekday.';renderModal();return}
+    if(d.daytimeOnly&&(d.only12night||d.only16)&&!d.only12day){m.err='12-hour night and 16-hour shifts run overnight, so they cannot be combined with daytime only.';renderModal();return}
+    if(d.only16&&!d.only12day&&!d.only12night&&!d.days.some(function(x){return x>=1&&x<=5})){m.err='16-hour shifts only happen Monday to Friday, so choose at least one weekday.';renderModal();return}
     var mx=String(d.maxHours||'').trim();
     if(mx&&!/^\d{1,3}$/.test(mx)||mx&&Number(mx)<1){m.err='Enter a whole number of hours, or leave it blank for no limit.';renderModal();return}
-    var rec={id:m.id||uid(),name:name,onlyShort:!!d.onlyShort,only12:!!d.only12,only16:!!d.only16,daytimeOnly:!!d.daytimeOnly,maxHours:mx?Number(mx):null,days:d.days.length===7?null:d.days.slice()};
+    var rec={id:m.id||uid(),name:name,onlyShort:!!d.onlyShort,only12day:!!d.only12day,only12night:!!d.only12night,only16:!!d.only16,daytimeOnly:!!d.daytimeOnly,maxHours:mx?Number(mx):null,days:d.days.length===7?null:d.days.slice()};
     if(m.id){S.roster.workers=S.roster.workers.map(function(w){return w.id===m.id?rec:w})}
     else{S.roster.workers.push(rec);if(S.draft)S.draft.avail.push(rec.id)}
     saveRoster();S.modal=null;render();
@@ -1171,8 +1176,8 @@ document.addEventListener('change',function(e){
   else if(b==='who'){S.who=el.value;render()}
   else if(b==='restore-file'){if(el.files&&el.files[0])restoreFrom(el.files[0]);el.value=''}
   else if(b==='pin-toggle'){S.modal.pin=el.checked}
-  else if(b==='w-short'){var dd=S.modal.draft;dd.onlyShort=el.checked;if(el.checked){dd.only12=false;dd.only16=false}S.modal.err=null;renderModal()}
-  else if(b==='w-12'||b==='w-16'){var d2=S.modal.draft;d2[b==='w-12'?'only12':'only16']=el.checked;if(el.checked)d2.onlyShort=false;S.modal.err=null;renderModal()}
+  else if(b==='w-short'){var dd=S.modal.draft;dd.onlyShort=el.checked;if(el.checked){dd.only12day=false;dd.only12night=false;dd.only16=false}S.modal.err=null;renderModal()}
+  else if(b==='w-12d'||b==='w-12n'||b==='w-16'){var d2=S.modal.draft;d2[b==='w-12d'?'only12day':(b==='w-12n'?'only12night':'only16')]=el.checked;if(el.checked)d2.onlyShort=false;S.modal.err=null;renderModal()}
   else if(b==='w-day'){S.modal.draft.daytimeOnly=el.checked}
 });
 document.addEventListener('input',function(e){
