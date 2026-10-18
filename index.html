@@ -1,0 +1,1115 @@
+<!doctype html>
+<html data-theme="dark" style="color-scheme: dark;"><head><meta charset="utf8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Bench Rota</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=Schibsted+Grotesk:wght@400;500;600;700&amp;display=swap">
+<style>
+/* Layout: one working column. The header carries period navigation and four tabs (Schedule, Hours, Setup, Team).
+   Schedule is a day-by-day ledger; each shift bar sits on a 24-hour lab day that starts at 08:30. */
+:root{
+  --bg:#EDF1EF; --surface:#FAFCFB; --ink:#13201E; --ink-2:#506360;
+  --line:#D2DBD8; --line-2:#E3EAE7;
+  --accent:#B8105C; --on-accent:#FFFFFF; --accent-soft:#F6DCE8;
+  --day:#4E9E92; --night:#233F52;
+  --ok:#1B7A4E; --warn:#B3261E; --warn-soft:#F8DEDB;
+  --wl:42%;
+  --font-ui:'Schibsted Grotesk',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1715; --surface:#16211F; --ink:#E5EEEB; --ink-2:#9BAFAA;
+    --line:#2B3C39; --line-2:#22312E;
+    --accent:#FF74AE; --on-accent:#2A0A1A; --accent-soft:#3A1828;
+    --day:#5BB5A8; --night:#7FA6C2;
+    --ok:#5ED59C; --warn:#FF8A80; --warn-soft:#3A1E1C;
+    --wl:64%; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1715; --surface:#16211F; --ink:#E5EEEB; --ink-2:#9BAFAA;
+  --line:#2B3C39; --line-2:#22312E;
+  --accent:#FF74AE; --on-accent:#2A0A1A; --accent-soft:#3A1828;
+  --day:#5BB5A8; --night:#7FA6C2;
+  --ok:#5ED59C; --warn:#FF8A80; --warn-soft:#3A1E1C;
+  --wl:64%; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--font-ui); font-size:15px; line-height:1.45;
+  padding-block:20px 72px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+.wrap{max-width:1000px;margin:0 auto}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit}
+h1,h2,h3{text-wrap:balance;margin:0}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* header */
+.brandline{display:flex;flex-wrap:wrap;gap:.25rem .9rem;align-items:baseline;justify-content:space-between;font-family:var(--font-mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.brandline b{color:var(--ink);font-weight:500}
+.store{letter-spacing:.04em;text-transform:none}
+.pnav{display:flex;align-items:center;gap:.6rem;margin-top:.9rem}
+.plabel{min-width:0;flex:1}
+.plabel h1{font-size:clamp(1.45rem,1rem + 2.6vw,2.3rem);font-weight:700;letter-spacing:-.025em;line-height:1.1;font-variant-numeric:tabular-nums}
+.pmeta{display:flex;flex-wrap:wrap;gap:.4rem .7rem;align-items:center;margin-top:.35rem;color:var(--ink-2);font-size:.85rem}
+.iconbtn{flex:none;width:2.6rem;height:2.6rem;display:grid;place-items:center;border:1px solid var(--line);background:var(--surface);border-radius:8px;cursor:pointer}
+.iconbtn:hover{border-color:var(--ink-2)}
+.iconbtn svg{width:1.1rem;height:1.1rem}
+.status{display:inline-flex;align-items:center;gap:.35rem;font-size:.78rem;font-weight:600;padding:.12rem .55rem;border-radius:99px;background:var(--line-2);color:var(--ink)}
+.status::before{content:"";width:.5rem;height:.5rem;border-radius:50%;background:var(--ink-2)}
+.status.built::before{background:var(--ok)}
+.status.todo::before{background:var(--accent)}
+.tabs{display:flex;gap:.1rem;margin-top:1.1rem;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{background:none;border:0;border-bottom:2px solid transparent;padding:.65rem .95rem;cursor:pointer;color:var(--ink-2);font-weight:600;white-space:nowrap;margin-bottom:-1px}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+main{padding-top:1.25rem}
+
+/* shared controls */
+.btn{padding:.55rem .95rem;border-radius:8px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-weight:600;font-size:.9rem}
+.btn:hover{border-color:var(--ink-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.primary:hover{filter:brightness(1.06)}
+.btn.small{padding:.35rem .65rem;font-size:.82rem}
+.btn.danger{color:var(--warn);border-color:var(--warn)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.link{background:none;border:0;padding:.2rem 0;color:var(--accent);font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:3px;font-size:.88rem}
+.field{display:flex;flex-direction:column;gap:.3rem}
+.field label,.lbl{font-size:.78rem;font-weight:600;color:var(--ink-2);letter-spacing:.02em}
+input[type=text],input[type=date],input[type=password],select{font:inherit;padding:.5rem .6rem;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);min-width:0;max-width:100%}
+input[type=checkbox]{width:1.15rem;height:1.15rem;accent-color:var(--accent);flex:none;margin:0}
+.row{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center}
+.grow{flex:1}
+.chip{display:inline-block;font-size:.74rem;font-weight:600;padding:.08rem .5rem;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);white-space:nowrap}
+.chip.accent{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
+.chip.warn{background:var(--warn-soft);border-color:transparent;color:var(--warn)}
+.dot{display:inline-block;width:.62rem;height:.62rem;border-radius:50%;flex:none;background:hsl(var(--wh,200) 58% var(--wl))}
+.muted{color:var(--ink-2)}
+.note{color:var(--ink-2);font-size:.88rem;max-width:62ch}
+
+/* toolbar + notices */
+.toolbar{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.toolbar .grp{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.notice{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:.8rem 1rem;margin-bottom:1rem}
+.notice.warn{border-color:var(--warn);background:var(--warn-soft)}
+.notice h3{font-size:.95rem;margin-bottom:.35rem}
+.notice ul{margin:.3rem 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:.15rem}
+.notice li button{background:none;border:0;padding:.1rem 0;text-align:left;cursor:pointer;text-decoration:underline;text-underline-offset:3px;font-size:.88rem}
+.legend{display:flex;flex-wrap:wrap;gap:.5rem 1.2rem;align-items:center;font-size:.8rem;color:var(--ink-2);margin-bottom:.4rem}
+.legend .sw{display:inline-block;width:1.3rem;height:.6rem;border-radius:3px;vertical-align:middle;margin-right:.35rem}
+
+/* schedule ledger */
+.wk{font-family:var(--font-mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);font-weight:500;margin:1.4rem 0 .35rem}
+.day{display:grid;grid-template-columns:4.8rem minmax(0,1fr);gap:.4rem .6rem;padding:.65rem .5rem;border-top:1px solid var(--line)}
+.day.weekend,.day.holiday{background:var(--surface);border-radius:10px;border:1px solid var(--line);margin:.2rem 0}
+.dnum{display:flex;flex-direction:column;line-height:1.1}
+.dw{font-family:var(--font-mono);font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-2)}
+.dd{font-size:1.6rem;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.dm{font-size:.78rem;color:var(--ink-2)}
+.dtag{grid-column:2;display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;font-size:.78rem;color:var(--ink-2);min-height:1.2rem}
+.shifts{grid-column:2;display:flex;flex-direction:column;gap:.1rem}
+.day > .dnum{grid-row:1 / span 2}
+.shift{display:grid;grid-template-columns:11rem 2.2rem minmax(4rem,1fr) minmax(7.5rem,13rem);gap:.6rem;align-items:center;text-align:left;width:100%;background:none;border:1px solid transparent;border-radius:8px;padding:.35rem .5rem;cursor:pointer}
+.shift:hover{background:var(--bg);border-color:var(--line)}
+.day.weekend .shift:hover,.day.holiday .shift:hover{background:var(--bg)}
+.shift .t{font-family:var(--font-mono);font-size:.8rem;font-variant-numeric:tabular-nums}
+.shift .h{font-family:var(--font-mono);font-size:.78rem;color:var(--ink-2)}
+.track{position:relative;height:.65rem;border-radius:4px;background-color:var(--line-2);background-image:linear-gradient(to right,var(--line) 1px,transparent 1px);background-size:16.6667% 100%}
+.bar{position:absolute;top:0;bottom:0;border-radius:4px}
+.bar.day{background:var(--day)}
+.bar.night{background:var(--night)}
+.who{display:flex;align-items:center;gap:.45rem;font-weight:600;min-width:0}
+.who .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.who .mk{font-family:var(--font-mono);font-size:.68rem;font-weight:500;color:var(--ink-2);border:1px solid var(--line);border-radius:4px;padding:0 .3rem}
+.shift.warn{border-color:var(--warn)}
+.shift.warn .mk.bad{color:var(--warn);border-color:var(--warn)}
+.shift.empty .who{color:var(--warn)}
+.shift.empty .track{background-image:repeating-linear-gradient(135deg,var(--warn-soft) 0 5px,transparent 5px 10px)}
+.shift.dim{opacity:.32}
+@media (max-width:600px){
+  .day{grid-template-columns:3.6rem minmax(0,1fr)}
+  .dd{font-size:1.3rem}
+  .shift{grid-template-columns:auto auto 1fr;grid-template-areas:"t h who" "track track track";row-gap:.3rem}
+  .shift .t{grid-area:t}.shift .h{grid-area:h}.shift .who{grid-area:who;justify-content:flex-end}.shift .track{grid-area:track}
+}
+
+/* hours */
+.readouts{display:grid;grid-template-columns:repeat(auto-fit,minmax(8.5rem,1fr));gap:.6rem;margin-bottom:1.2rem}
+.ro{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:.65rem .8rem}
+.ro .k{font-size:.74rem;font-weight:600;color:var(--ink-2);letter-spacing:.02em}
+.ro .v{font-family:var(--font-mono);font-size:1.35rem;font-weight:500;font-variant-numeric:tabular-nums}
+.hours{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden}
+.hr{display:grid;grid-template-columns:minmax(8rem,13rem) minmax(5rem,1fr) 4.2rem 3.6rem;gap:.4rem .9rem;align-items:center;padding:.7rem .9rem;border-top:1px solid var(--line-2)}
+.hr:first-child{border-top:0}
+.hname{display:flex;flex-direction:column;gap:.15rem;min-width:0}
+.hname .n{display:flex;gap:.45rem;align-items:center;font-weight:600}
+.hname .sub{font-size:.76rem;color:var(--ink-2)}
+.hbar{position:relative;height:.9rem;background:var(--line-2);border-radius:5px}
+.hbar .fill{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:hsl(var(--wh,200) 58% var(--wl))}
+.hbar .mean{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink)}
+.hnum{font-family:var(--font-mono);font-size:1.05rem;text-align:right;font-variant-numeric:tabular-nums}
+.hdev{font-family:var(--font-mono);font-size:.82rem;text-align:right;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.hr.restricted .hnum::after{content:"*";color:var(--accent)}
+@media (max-width:600px){
+  .hr{grid-template-columns:1fr auto auto;grid-template-areas:"name num dev" "bar bar bar"}
+  .hr .hname{grid-area:name}.hr .hbar{grid-area:bar}.hr .hnum{grid-area:num}.hr .hdev{grid-area:dev}
+}
+
+/* setup + team */
+.step{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:1rem 1.1rem;margin-bottom:1rem}
+.step h2{font-size:1.1rem;font-weight:700;letter-spacing:-.01em;display:flex;flex-wrap:wrap;gap:.2rem .7rem;align-items:baseline}
+.stepn{font-family:var(--font-mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:500}
+.step > .note{margin:.35rem 0 .8rem}
+.wlist{display:flex;flex-direction:column}
+.wrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.3rem .8rem;padding:.65rem 0;border-top:1px solid var(--line-2);align-items:center}
+.wrow:first-child{border-top:0}
+.wmain{display:flex;flex-wrap:wrap;gap:.35rem .7rem;align-items:center;min-width:0}
+.chk{display:flex;align-items:center;gap:.6rem;font-weight:600;cursor:pointer;min-width:0}
+.wacts{display:flex;gap:.9rem;align-items:center}
+.offbox{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:.5rem;align-items:flex-end;background:var(--bg);border-radius:8px;padding:.6rem .7rem}
+.offbox .chips{display:flex;flex-wrap:wrap;gap:.35rem;width:100%}
+.offchip{display:inline-flex;gap:.35rem;align-items:center;font-family:var(--font-mono);font-size:.76rem;padding:.12rem .25rem .12rem .55rem;border-radius:99px;background:var(--surface);border:1px solid var(--line)}
+.offchip button{border:0;background:none;cursor:pointer;color:var(--ink-2);padding:0 .3rem;font-size:1rem;line-height:1}
+.hol{padding:.7rem 0;border-top:1px solid var(--line-2);display:flex;flex-direction:column;gap:.5rem}
+.hol:first-of-type{border-top:0}
+.pins{display:grid;grid-template-columns:repeat(auto-fit,minmax(11rem,1fr));gap:.6rem;margin-left:1.75rem}
+.summary{display:flex;flex-wrap:wrap;gap:.4rem 1.4rem;font-size:.9rem;margin:.6rem 0 1rem;color:var(--ink-2)}
+.summary b{color:var(--ink);font-family:var(--font-mono);font-weight:500}
+.empty-state{border:1px dashed var(--ink-2);border-radius:12px;padding:2rem 1.2rem;text-align:center;display:flex;flex-direction:column;gap:.8rem;align-items:center}
+.empty-state h2{font-size:1.2rem}
+.empty-state p{margin:0;max-width:52ch;color:var(--ink-2)}
+
+/* modal */
+.backdrop{position:fixed;inset:0;z-index:50;background:rgba(8,16,14,.6);display:flex;align-items:center;justify-content:center;
+  padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.panel{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:14px;width:min(560px,100%);max-height:90vh;max-height:calc(100dvh - 2rem);overflow:auto;padding:1.1rem 1.2rem;display:flex;flex-direction:column;gap:.9rem}
+.panel h2{font-size:1.15rem;letter-spacing:-.01em}
+.panel .sub{font-family:var(--font-mono);font-size:.8rem;color:var(--ink-2);margin-top:.25rem}
+.cands{display:flex;flex-direction:column;gap:.35rem}
+.cand{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.15rem .7rem;text-align:left;width:100%;padding:.55rem .7rem;border-radius:8px;border:1px solid var(--line);background:var(--surface);cursor:pointer}
+.cand:hover{border-color:var(--ink-2)}
+.cand.cur{border-color:var(--accent);background:var(--accent-soft)}
+.cand .nm{display:flex;gap:.5rem;align-items:center;font-weight:600;min-width:0}
+.cand .hh{font-family:var(--font-mono);font-size:.78rem;color:var(--ink-2);text-align:right}
+.cand .why{grid-column:1 / -1;font-size:.78rem;color:var(--warn)}
+.cand.blocked{opacity:.8}
+.daypick{display:flex;flex-wrap:wrap;gap:.35rem}
+.daypick button{min-width:2.9rem;padding:.4rem .5rem;border-radius:8px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-weight:600;font-size:.85rem}
+.daypick button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.err{color:var(--warn);font-size:.85rem;font-weight:600}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:max(16px,env(safe-area-inset-bottom,0px));z-index:60;background:var(--ink);color:var(--bg);padding:.6rem .9rem;border-radius:10px;display:flex;gap:.9rem;align-items:center;max-width:calc(100% - 32px);font-size:.9rem;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+.toast button{background:none;border:0;color:inherit;font-weight:700;text-decoration:underline;cursor:pointer}
+@media (prefers-reduced-motion:no-preference){.tab,.btn,.shift,.cand{transition:border-color .12s,background-color .12s,color .12s}}
+
+.pubview .day .shift{cursor:default}.pubview .day .shift:hover{background:none;border-color:transparent}
+.pubfoot{margin-top:2.5rem;padding-top:1rem;border-top:1px solid var(--line);text-align:center}
+.gate{max-width:26rem;margin:2rem auto 0;display:flex;flex-direction:column;gap:.8rem}
+.mine{border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden}
+.mrow{display:grid;grid-template-columns:minmax(9rem,1.4fr) 11rem 1fr 3rem;gap:.4rem .9rem;align-items:center;padding:.7rem .9rem;border-top:1px solid var(--line-2)}
+.mrow:first-child{border-top:0}.mdate{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center}.mh{text-align:right}
+@media (max-width:600px){.mrow{grid-template-columns:1fr auto auto}.mrow>:first-child{grid-column:1 / -1}}
+</style>
+<script type="application/json" id="snap">{}</script>
+<div class="wrap" id="app"></div>
+<div id="modal-root"></div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden=""></div>
+
+<script>
+//#LOGIC-START
+/* ---------- dates (all strings are YYYY-MM-DD, arithmetic in UTC days so time zones never shift a date) ---------- */
+var DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+var DOWL=['Sundays','Mondays','Tuesdays','Wednesdays','Thursdays','Fridays','Saturdays'];
+var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function pad(n){return String(n).padStart(2,'0')}
+function ymd(y,m,d){return y+'-'+pad(m+1)+'-'+pad(d)}
+function parseD(s){var a=s.split('-').map(Number);return {y:a[0],m:a[1]-1,d:a[2]}}
+function dnum(s){var p=parseD(s);return Date.UTC(p.y,p.m,p.d)/86400000}
+function fromNum(n){var t=new Date(n*86400000);return ymd(t.getUTCFullYear(),t.getUTCMonth(),t.getUTCDate())}
+function addDays(s,n){return fromNum(dnum(s)+n)}
+function dow(s){return new Date(dnum(s)*86400000).getUTCDay()}
+function fmtShort(s){var p=parseD(s);return MON[p.m]+' '+p.d}
+function fmtLong(s){var p=parseD(s);return DOW[dow(s)]+' '+p.d+' '+MON[p.m]}
+
+/* ---------- periods run from the 26th of a month to the 25th of the next; the id is the start month ---------- */
+function periodStart(id){return id+'-26'}
+function periodEnd(id){var a=id.split('-').map(Number);var y=a[1]===12?a[0]+1:a[0],m=a[1]===12?1:a[1]+1;return y+'-'+pad(m)+'-25'}
+function periodDates(id){var out=[],e=dnum(periodEnd(id));for(var n=dnum(periodStart(id));n<=e;n++)out.push(fromNum(n));return out}
+function shiftPeriodId(id,delta){var a=id.split('-').map(Number);var t=a[0]*12+(a[1]-1)+delta;return Math.floor(t/12)+'-'+pad(t%12+1)}
+function periodIdFor(s){var p=parseD(s),y=p.y,m=p.m;if(p.d<26){m-=1;if(m<0){m=11;y-=1}}return y+'-'+pad(m+1)}
+function periodLabel(id){var s=periodStart(id),e=periodEnd(id);var ys=s.slice(0,4),ye=e.slice(0,4);
+  return ys===ye?fmtShort(s)+' – '+fmtShort(e)+', '+ye:fmtShort(s)+', '+ys+' – '+fmtShort(e)+', '+ye}
+
+/* ---------- Jamaican public holidays (editable in the app, since extra days can be declared) ---------- */
+function easter(y){var a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),
+  h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),
+  mo=Math.floor((h+l-7*m+114)/31),da=((h+l-7*m+114)%31)+1;return ymd(y,mo-1,da)}
+function jmHolidays(y){
+  var list=[];function add(d,n){list.push({date:d,name:n})}
+  function sunToMon(d){return dow(d)===0?addDays(d,1):d}
+  add(sunToMon(y+'-01-01'),"New Year's Day");
+  var e=easter(y);
+  add(addDays(e,-46),'Ash Wednesday');add(addDays(e,-2),'Good Friday');add(addDays(e,1),'Easter Monday');
+  var lab=y+'-05-23',ld=dow(lab);if(ld===0)lab=addDays(lab,1);else if(ld===6)lab=addDays(lab,2);add(lab,'Labour Day');
+  add(sunToMon(y+'-08-01'),'Emancipation Day');add(sunToMon(y+'-08-06'),'Independence Day');
+  var o=y+'-10-01';add(addDays(o,((1-dow(o)+7)%7)+14),'National Heroes Day');
+  var xd=dow(y+'-12-25');
+  add(y+'-12-25','Christmas Day');
+  if(xd===0){add(y+'-12-26','Boxing Day');add(y+'-12-27','Christmas Day (observed)')}
+  else if(xd===6){add(y+'-12-27','Boxing Day (observed)')}
+  else add(y+'-12-26','Boxing Day');
+  return list;
+}
+function holidaysInPeriod(id){
+  var s=periodStart(id),e=periodEnd(id),ys=parseD(s).y,ye=parseD(e).y,out=[],seen={};
+  for(var y=ys;y<=ye;y++)jmHolidays(y).forEach(function(h){if(h.date>=s&&h.date<=e&&!seen[h.date]){seen[h.date]=1;out.push({date:h.date,name:h.name,on:true,pins:[null,null,null]})}});
+  return out.sort(function(a,b){return a.date<b.date?-1:1});
+}
+
+/* ---------- shift templates ---------- */
+var TEMPLATES={
+  weekday:[{id:'A',label:'Evening',sh:16.5,h:4},{id:'B',label:'Overnight',sh:16.5,h:16}],
+  weekend:[{id:'A',label:'Morning',sh:8.5,h:4},{id:'B',label:'Afternoon',sh:12.5,h:4},{id:'C',label:'Day',sh:8.5,h:12},{id:'D',label:'Night',sh:20.5,h:12}],
+  holiday:[{id:'A',label:'Morning',sh:8.5,h:4},{id:'B',label:'Day',sh:8.5,h:12},{id:'C',label:'Night',sh:20.5,h:12}]
+};
+function clock(h){var t=Math.round(h*60)%1440,hr=Math.floor(t/60),mn=t%60,ap=hr<12?'AM':'PM',h12=hr%12===0?12:hr%12;return h12+':'+pad(mn)+' '+ap}
+function dayType(date,hset){var w=dow(date);if(w===0||w===6)return 'weekend';return hset[date]?'holiday':'weekday'}
+function holidaySet(period){var o={};(period.holidays||[]).forEach(function(h){if(h.on!==false)o[h.date]=h.name});return o}
+function buildSlots(period){
+  var hset=holidaySet(period),out=[];
+  periodDates(period.id).forEach(function(date){
+    var type=dayType(date,hset),dn=dnum(date);
+    TEMPLATES[type].forEach(function(t){
+      var start=dn*1440+Math.round(t.sh*60);
+      out.push({key:date+'|'+t.id,date:date,dn:dn,id:t.id,type:type,label:t.label,startMin:start,endMin:start+t.h*60,hours:t.h,sh:t.sh,
+        startClock:clock(t.sh),endClock:clock(t.sh+t.h),daytime:t.sh>=8.5&&t.sh+t.h<=20.5,short:t.h<=4,overnight:t.sh+t.h>24,
+        holidayName:hset[date]||null});
+    });
+  });
+  return out;
+}
+
+/* ---------- rules ---------- */
+var LEVELS={strict:{long:12,short:8,consec:5},relaxed:{long:8,short:4,consec:7}};
+function staticReasons(w,s){
+  var r=[];
+  if((w.daysOff||[]).indexOf(s.date)>=0)r.push('Marked unavailable that day');
+  if(w.days&&w.days.length&&w.days.indexOf(dow(s.date))<0)r.push('Only works '+w.days.slice().sort(function(a,b){return ((a+6)%7)-((b+6)%7)}).map(function(d){return DOW[d]}).join(', '));
+  if(w.daytimeOnly&&!s.daytime)r.push('Daytime only (8:30am to 8:30pm)');
+  if(w.onlyShort&&!s.short)r.push('4-hour shifts only');
+  if((w.only12||w.only16)&&!((w.only12&&s.hours===12)||(w.only16&&s.hours===16)))r.push(w.only12&&w.only16?'12 or 16-hour shifts only':(w.only16?'16-hour shifts only':'12-hour shifts only'));
+  return r;
+}
+function pairReason(a,b,lv){
+  var f=a,s=b;if(b.startMin<a.startMin){f=b;s=a}
+  var gap=s.startMin-f.endMin;
+  if(gap<0)return 'Overlaps another shift';
+  var need=(f.hours>=12?lv.long:lv.short)*60;
+  if(gap<need)return 'Under '+(need/60)+'h rest between shifts';
+  return null;
+}
+
+/* ---------- scheduler: greedy fill, many restarts, then swap/move local search toward equal hours ---------- */
+function searchSchedule(slots,workers,lockedMap,lv,restarts,shortIters,longIters){
+  var n=workers.length,m=slots.length,widx={};
+  workers.forEach(function(w,k){widx[w.id]=k});
+  if(!n)return {assign:new Array(m).fill(-1),unfilled:m};
+  var ok=workers.map(function(w){return slots.map(function(s){return staticReasons(w,s).length===0})});
+  var lockedIdx=new Array(m).fill(false),lockedW=new Array(m).fill(-1),totH=0,totW=0;
+  slots.forEach(function(s,i){
+    totH+=s.hours;if(s.type!=='weekday')totW+=s.hours;
+    var id=lockedMap[s.key];if(id!==undefined&&widx[id]!==undefined){lockedIdx[i]=true;lockedW[i]=widx[id]}
+  });
+  var mH=totH/n,mW=totW/n;
+  var cap=workers.map(function(w){return w.maxHours>0?w.maxHours:Infinity});
+  function term(h,hw){var a=h-mH,b=hw-mW;return a*a+0.15*b*b}
+  function makeState(){
+    var st={assign:new Array(m).fill(-1),per:workers.map(function(){return []}),H:new Float64Array(n),HW:new Float64Array(n)};
+    st.place=function(i,w){st.assign[i]=w;st.per[w].push(i);st.H[w]+=slots[i].hours;if(slots[i].type!=='weekday')st.HW[w]+=slots[i].hours};
+    st.unplace=function(i){var w=st.assign[i];if(w<0)return;var a=st.per[w];a.splice(a.indexOf(i),1);st.H[w]-=slots[i].hours;if(slots[i].type!=='weekday')st.HW[w]-=slots[i].hours;st.assign[i]=-1};
+    return st;
+  }
+  function valid(st,w,i,ign){
+    var s=slots[i],per=st.per[w],set={},k;
+    if(st.H[w]-(ign>=0?slots[ign].hours:0)+s.hours>cap[w])return false;
+    set[s.dn]=1;
+    for(k=0;k<per.length;k++){var j=per[k];if(j===ign)continue;if(pairReason(slots[j],s,lv))return false;set[slots[j].dn]=1}
+    var run=1,d=s.dn;
+    for(k=d-1;set[k];k--)run++;
+    for(k=d+1;set[k];k++)run++;
+    return run<=lv.consec;
+  }
+  function greedy(noise){
+    var st=makeState(),order=[],i,w;
+    for(i=0;i<m;i++){if(lockedIdx[i])st.place(i,lockedW[i]);else order.push(i)}
+    var elig={},rnd={};
+    order.forEach(function(i){var c=0;for(var w=0;w<n;w++)if(ok[w][i])c++;elig[i]=c;rnd[i]=Math.random()});
+    order.sort(function(a,b){return elig[a]-elig[b]||slots[b].hours-slots[a].hours||rnd[a]-rnd[b]});
+    order.forEach(function(i){
+      var bw=-1,bs=Infinity;
+      for(var w=0;w<n;w++){if(!ok[w][i]||!valid(st,w,i,-1))continue;var sc=st.H[w]+Math.random()*noise;if(sc<bs){bs=sc;bw=w}}
+      if(bw>=0)st.place(i,bw);
+    });
+    return st;
+  }
+  function cost(st){
+    var c=0,w,i;for(i=0;i<m;i++)if(st.assign[i]<0)c+=1e5;
+    for(w=0;w<n;w++)c+=term(st.H[w],st.HW[w]);return c;
+  }
+  var free=[];for(var q=0;q<m;q++)if(!lockedIdx[q])free.push(q);
+  function improve(st,iters){
+    if(!free.length||n<2)return;
+    for(var it=0;it<iters;it++){
+      var i=free[(Math.random()*free.length)|0],A=st.assign[i],w,t;
+      if(A<0){
+        var bw=-1,bh=Infinity;
+        for(w=0;w<n;w++)if(ok[w][i]&&st.H[w]<bh&&valid(st,w,i,-1)){bh=st.H[w];bw=w}
+        if(bw>=0)st.place(i,bw);
+        continue;
+      }
+      var hi=slots[i].hours,wi=slots[i].type!=='weekday'?hi:0;
+      var B=(Math.random()*n)|0;if(B===A)continue;
+      if(Math.random()<0.6){for(t=0;t<2;t++){var c=(Math.random()*n)|0;if(c!==A&&st.H[c]<st.H[B])B=c}}
+      var base=term(st.H[A],st.HW[A])+term(st.H[B],st.HW[B]);
+      if(ok[B][i]&&valid(st,B,i,-1)){
+        var d=term(st.H[A]-hi,st.HW[A]-wi)+term(st.H[B]+hi,st.HW[B]+wi)-base;
+        if(d<-1e-9){st.unplace(i);st.place(i,B);continue}
+      }
+      var pb=st.per[B];if(!pb.length)continue;
+      var j=pb[(Math.random()*pb.length)|0];
+      if(lockedIdx[j]||j===i||!ok[B][i]||!ok[A][j])continue;
+      if(!valid(st,B,i,j)||!valid(st,A,j,i))continue;
+      var hj=slots[j].hours,wj=slots[j].type!=='weekday'?hj:0;
+      var d2=term(st.H[A]-hi+hj,st.HW[A]-wi+wj)+term(st.H[B]+hi-hj,st.HW[B]+wi-wj)-base;
+      if(d2<-1e-9){st.unplace(i);st.unplace(j);st.place(i,B);st.place(j,A)}
+    }
+  }
+  var best=null,bc=Infinity;
+  for(var r=0;r<restarts;r++){
+    var st=greedy(r*1.3);improve(st,shortIters);
+    var c=cost(st);if(c<bc){bc=c;best=st}
+  }
+  improve(best,longIters);
+  var unf=0;for(var z=0;z<m;z++)if(best.assign[z]<0)unf++;
+  return {assign:best.assign,unfilled:unf};
+}
+function generateSchedule(period,opts){
+  opts=opts||{};
+  var slots=buildSlots(period),workers=period.workers,locked={},k;
+  for(k in period.slots){var e=period.slots[k];if(e&&e.w&&(opts.lockAll||e.l))locked[k]=e.w}
+  var best=null,names=['strict','relaxed'];
+  for(var q=0;q<names.length;q++){
+    var r=searchSchedule(slots,workers,locked,LEVELS[names[q]],18,500,18000);
+    r.level=names[q];
+    if(!best||r.unfilled<best.unfilled)best=r;
+    if(r.unfilled===0)break;
+  }
+  var out={};
+  slots.forEach(function(s,i){
+    var w=best.assign[i];if(w<0)return;
+    var id=workers[w].id,old=period.slots[s.key];
+    out[s.key]={w:id};if(old&&old.l&&old.w===id)out[s.key].l=1;
+  });
+  return {slots:out,unfilled:best.unfilled,relaxed:best.level==='relaxed'};
+}
+
+/* ---------- checks and totals on a finished schedule ---------- */
+function validate(period,slots){
+  var per={},issues={},unfilled=[],over={};
+  slots.forEach(function(s){var e=period.slots[s.key];if(e&&e.w)(per[e.w]=per[e.w]||[]).push(s)});
+  period.workers.forEach(function(w){
+    if(!(w.maxHours>0))return;
+    var cum=0;(per[w.id]||[]).slice().sort(function(a,b){return a.startMin-b.startMin}).forEach(function(s){cum+=s.hours;if(cum>w.maxHours)over[s.key]=w.maxHours});
+  });
+  slots.forEach(function(s){
+    var e=period.slots[s.key];
+    if(!e||!e.w){unfilled.push(s.key);return}
+    var w=period.workers.filter(function(x){return x.id===e.w})[0];
+    var r=w?staticReasons(w,s):['Person is not on this period'],mine=per[e.w]||[],set={},i;
+    mine.forEach(function(o){set[o.dn]=1;if(o===s)return;var pr=pairReason(o,s,LEVELS.relaxed);if(pr&&r.indexOf(pr)<0)r.push(pr)});
+    var run=1,k;for(k=s.dn-1;set[k];k--)run++;for(k=s.dn+1;set[k];k++)run++;
+    if(run>LEVELS.relaxed.consec)r.push('More than '+LEVELS.relaxed.consec+' days in a row');
+    if(over[s.key])r.push('Over the '+over[s.key]+'-hour limit');
+    if(r.length)issues[s.key]=r;
+  });
+  return {issues:issues,unfilled:unfilled,issueCount:Object.keys(issues).length};
+}
+function tally(period,slots){
+  var rows={};
+  period.workers.forEach(function(w){rows[w.id]={w:w,total:0,count:0,weekday:0,special:0,night:0}});
+  slots.forEach(function(s){
+    var e=period.slots[s.key];if(!e||!e.w||!rows[e.w])return;
+    var r=rows[e.w];r.total+=s.hours;r.count++;
+    if(s.type==='weekday')r.weekday+=s.hours;else r.special+=s.hours;
+    if(s.overnight)r.night+=s.hours;
+  });
+  return period.workers.map(function(w){return rows[w.id]});
+}
+function workerReasons(period,slots,worker,slot){
+  var r=staticReasons(worker,slot),set={},used=0;
+  slots.forEach(function(o){
+    var e=period.slots[o.key];if(!e||e.w!==worker.id||o.key===slot.key)return;
+    used+=o.hours;set[o.dn]=1;var pr=pairReason(o,slot,LEVELS.relaxed);if(pr&&r.indexOf(pr)<0)r.push(pr);
+  });
+  set[slot.dn]=1;var run=1,k;for(k=slot.dn-1;set[k];k--)run++;for(k=slot.dn+1;set[k];k++)run++;
+  if(run>LEVELS.relaxed.consec)r.push('More than '+LEVELS.relaxed.consec+' days in a row');
+  if(worker.maxHours>0&&used+slot.hours>worker.maxHours)r.push('Would pass the '+worker.maxHours+'-hour limit');
+  return r;
+}
+//#LOGIC-END
+
+(function(){
+'use strict';
+var S={ready:false,mode:'loading',roster:{workers:[],lastAvailable:[]},periods:{},pid:null,tab:'schedule',draft:null,
+  modal:null,hl:'',undo:null,expanded:{},clearPins:false,
+  view:'public',pub:{},pubAt:null,ptab:'schedule',who:'',gate:'loading',gateErr:null,auth:null,unlocked:false,backendReady:false};
+var DB=null,DL=null,U=null,writeChain=Promise.resolve();
+
+/* ---------- helpers ---------- */
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function clone(o){return JSON.parse(JSON.stringify(o))}
+function uid(){return 'w'+Math.random().toString(36).slice(2,8)+Date.now().toString(36).slice(-3)}
+function fh(n){return (Math.round(n*10)/10).toFixed(n%1===0?0:1)}
+function todayStr(){var t=new Date();return ymd(t.getFullYear(),t.getMonth(),t.getDate())}
+function cur(){return (S.view==='public'?S.pub:S.periods)[S.pid]||null}
+function hue(p,wid){var k=p?p.workers.findIndex(function(w){return w.id===wid}):-1;if(k<0)k=0;return Math.round((k*137.5)%360)}
+function hueR(wid){var k=S.roster.workers.findIndex(function(w){return w.id===wid});if(k<0)k=0;return Math.round((k*137.5)%360)}
+function chipsFor(w){
+  var c=[];
+  if(w.onlyShort)c.push('4h shifts only');
+  if(w.only12&&w.only16)c.push('12h or 16h shifts only');else if(w.only16)c.push('16h shifts only');else if(w.only12)c.push('12h shifts only');
+  if(w.days&&w.days.length&&w.days.length<7)c.push(w.days.slice().sort(function(a,b){return ((a+6)%7)-((b+6)%7)}).map(function(d){return DOW[d]}).join(' '));
+  if(w.daytimeOnly)c.push('8:30am–8:30pm only');
+  if(w.maxHours>0)c.push('Max '+w.maxHours+'h');
+  return c;
+}
+var ICON={
+  prev:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5"/></svg>',
+  next:'<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 4.5 13 10l-5.5 5.5"/></svg>'
+};
+
+/* ---------- storage: this browser (localStorage) ---------- */
+function lsGet(path){try{var v=localStorage.getItem('benchrota:'+path);return v?JSON.parse(v):null}catch(e){return null}}
+function lsSet(path,data){localStorage.setItem('benchrota:'+path,JSON.stringify(data))}
+function persist(path,data){
+  var snap=clone(data);
+  writeChain=writeChain.then(function(){
+    return DB?DB.doc(path).set(snap):lsSet(path,snap);
+  }).catch(function(err){
+    try{console.error(err)}catch(e){}
+    toast(err&&err.code==='invalid_argument'?'You have view-only access, so this change was not saved.':'Could not save. Your change is on screen but may be lost if you close the page.');
+  });
+  return writeChain;
+}
+function saveRoster(){return persist('settings/roster',S.roster)}
+function savePeriod(p){return persist('periods/'+p.id,p)}
+async function loadAll(){
+  var r,list=[];
+  if(DB){
+    var rs=await DB.doc('settings/roster').get();r=rs.exists?clone(rs.data()):null;
+    var q=await DB.collection('periods').get();
+    q.docs.forEach(function(d){if(d.exists)list.push(clone(d.data()))});
+  }else{
+    r=lsGet('settings/roster');
+    try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.indexOf('benchrota:periods/')===0){var v=lsGet(k.slice(9));if(v)list.push(v)}}}catch(e){}
+  }
+  if(r&&r.workers)S.roster={workers:r.workers,lastAvailable:r.lastAvailable||[]};
+  list.forEach(function(p){if(p&&p.id)S.periods[p.id]=p});
+}
+
+/* ---------- toast + modal plumbing ---------- */
+var toastTimer=null;
+function toast(msg,label,fn){
+  var el=document.getElementById('toast');
+  el.innerHTML='<span>'+esc(msg)+'</span>'+(label?'<button type="button" id="toast-act">'+esc(label)+'</button>':'');
+  el.hidden=false;
+  if(label){document.getElementById('toast-act').onclick=function(){el.hidden=true;fn()}}
+  clearTimeout(toastTimer);toastTimer=setTimeout(function(){el.hidden=true},label?9000:4500);
+}
+function closeModal(){S.modal=null;renderModal()}
+
+/* ---------- views ---------- */
+function headerHTML(){
+  var p=cur(),status=!S.ready?'':(p?'<span class="status built">Schedule built</span>':'<span class="status todo">Needs setup</span>');
+  var store=S.mode==='db'?'Saved with this page':(S.mode==='local'?'Saved in this browser only':'Loading…');
+  var tabs=[['schedule','Schedule'],['hours','Hours'],['setup','Setup'],['team','Team']];
+  return '<header>'+
+    '<div class="brandline"><span><b>Bench Rota</b> · admin</span><span class="store">'+store+'</span><span class="row" style="gap:.4rem;letter-spacing:0;text-transform:none"><button type="button" class="btn small primary" data-act="publish">Download schedule.json</button><button type="button" class="btn small" data-act="backup">Backup</button><button type="button" class="btn small" data-act="restore">Restore</button><input type="file" id="restore-file" data-bind="restore-file" accept=".json,application/json" hidden><button type="button" class="btn small" data-act="change-pw-open">Password</button><button type="button" class="btn small" data-act="lock">Lock</button></span></div>'+
+    '<div class="pnav"><button type="button" class="iconbtn" data-act="pprev" aria-label="Previous period">'+ICON.prev+'</button>'+
+    '<div class="plabel"><h1>'+esc(periodLabel(S.pid))+'</h1><div class="pmeta"><span>26th to 25th</span>'+status+'</div></div>'+
+    '<button type="button" class="iconbtn" data-act="pnext" aria-label="Next period">'+ICON.next+'</button></div>'+
+    '<nav class="tabs" role="tablist" aria-label="Sections">'+tabs.map(function(t){
+      return '<button type="button" role="tab" class="tab" data-act="tab" data-tab="'+t[0]+'" aria-selected="'+(S.tab===t[0])+'">'+t[1]+'</button>'}).join('')+'</nav></header>';
+}
+function emptyPeriodHTML(why){
+  if(S.view==='public')return '<div class="empty-state"><h2>No schedule published for '+esc(periodLabel(S.pid))+' yet</h2><p>Please check back once the new schedule has been published.</p></div>';
+  return '<div class="empty-state"><h2>No schedule for '+esc(periodLabel(S.pid))+' yet</h2>'+
+    '<p>'+(why||'Choose who is available this period, confirm holidays, and the app builds a balanced schedule you can then adjust by hand.')+'</p>'+
+    '<button type="button" class="btn primary" data-act="tab" data-tab="setup">Set up this period</button></div>';
+}
+function scheduleHTML(){
+  var p=cur();if(!p)return emptyPeriodHTML();
+  var slots=buildSlots(p),val=validate(p,slots),h='';
+  var opts='<option value="">Everyone</option>'+p.workers.map(function(w){return '<option value="'+esc(w.id)+'"'+(S.hl===w.id?' selected':'')+'>'+esc(w.name)+'</option>'}).join('');
+  h+='<div class="toolbar"><div class="grp"><div class="field"><label for="hl">Highlight</label><select id="hl" data-bind="hl">'+opts+'</select></div></div>'+
+    '<div class="grp">'+(S.undo&&S.undo.pid===p.id?'<button type="button" class="btn small" data-act="undo">Undo</button>':'')+
+    (val.unfilled.length?'<button type="button" class="btn small" data-act="fill">Fill empty shifts</button>':'')+
+    '<button type="button" class="btn small" data-act="rebuild">Rebuild unpinned shifts</button>'+
+    (DL?'<button type="button" class="btn small" data-act="export-sched">Export CSV</button>':'')+'</div></div>';
+  if(val.unfilled.length||val.issueCount){
+    var items=[];
+    val.unfilled.forEach(function(k){var s=slots.filter(function(x){return x.key===k})[0];items.push('<li><button type="button" data-act="shift" data-key="'+esc(k)+'">'+esc(fmtLong(s.date))+' · '+esc(s.label)+' '+s.startClock+'–'+s.endClock+': no one assigned</button></li>')});
+    Object.keys(val.issues).forEach(function(k){var s=slots.filter(function(x){return x.key===k})[0];items.push('<li><button type="button" data-act="shift" data-key="'+esc(k)+'">'+esc(fmtLong(s.date))+' · '+esc(s.label)+': '+esc(val.issues[k].join('; '))+'</button></li>')});
+    h+='<div class="notice warn"><h3>'+(val.unfilled.length?val.unfilled.length+' unfilled':'')+(val.unfilled.length&&val.issueCount?' and ':'')+(val.issueCount?val.issueCount+' with a rule problem':'')+'</h3>'+
+      '<span class="note">Select one to fix it by hand.'+(val.unfilled.length?' If there are too few available people, add someone in Setup and rebuild.':'')+'</span><ul>'+items.slice(0,10).join('')+'</ul>'+(items.length>10?'<span class="note">and '+(items.length-10)+' more</span>':'')+'</div>';
+  }
+  if(p.relaxed&&!val.unfilled.length)h+='<div class="notice"><span class="note">With this team size, some rest gaps are shorter than the preferred 12 hours after long shifts, and a few people work up to 7 days in a row. Adding one more available person usually fixes this.</span></div>';
+  h+='<div class="legend"><span><i class="sw" style="background:var(--day)"></i>Day shift</span><span><i class="sw" style="background:var(--night)"></i>Overnight</span><span>Bars sit on a lab day that runs 8:30 AM to 8:30 AM, ticks every 4 hours</span></div>';
+  var byDay={};slots.forEach(function(s){(byDay[s.date]=byDay[s.date]||[]).push(s)});
+  var dates=periodDates(p.id),i=0;
+  while(i<dates.length){
+    var j=i+1;while(j<dates.length&&dow(dates[j])!==1)j++;
+    h+='<h3 class="wk">'+esc(fmtShort(dates[i]))+' – '+esc(fmtShort(dates[j-1]))+'</h3>';
+    for(var d=i;d<j;d++)h+=dayHTML(p,dates[d],byDay[dates[d]],val);
+    i=j;
+  }
+  return h;
+}
+function dayHTML(p,date,slots,val){
+  var type=slots[0].type,pd=parseD(date),hn=slots[0].holidayName;
+  var tag=type==='weekend'?'<span>Weekend · 4 people</span>':(type==='holiday'?'<span class="chip accent">Holiday</span><span>'+esc(hn)+' · 3 people</span>':'<span>Weekday · 2 people</span>');
+  if(type==='weekend'&&hn)tag+='<span class="chip">'+esc(hn)+'</span>';
+  var h='<section class="day '+type+'" id="d-'+date+'"><div class="dnum"><span class="dw">'+DOW[dow(date)]+'</span><span class="dd">'+pd.d+'</span><span class="dm">'+MON[pd.m]+'</span></div><div class="dtag">'+tag+'</div><div class="shifts">';
+  slots.forEach(function(s){
+    var e=p.slots[s.key],w=e&&e.w?p.workers.filter(function(x){return x.id===e.w})[0]:null,bad=val.issues[s.key];
+    var left=(s.sh-8.5)/24*100,wid=s.hours/24*100;
+    var cls='shift'+(w?'':' empty')+(bad?' warn':'')+(S.hl&&(!w||w.id!==S.hl)?' dim':'');
+    h+='<button type="button" class="'+cls+'" data-act="shift" data-key="'+esc(s.key)+'">'+
+      '<span class="t">'+s.startClock+'–'+s.endClock+'</span><span class="h">'+s.hours+'h</span>'+
+      '<span class="track" aria-hidden="true"><i class="bar '+(s.overnight?'night':'day')+'" style="left:'+left.toFixed(2)+'%;width:'+wid.toFixed(2)+'%"></i></span>'+
+      '<span class="who">'+(w?'<i class="dot" style="--wh:'+hue(p,w.id)+'"></i><span class="nm">'+esc(w.name)+'</span>'+(e.l&&S.view==='admin'?'<span class="mk">pinned</span>':'')+(bad?'<span class="mk bad" title="'+esc(bad.join('; '))+'">check</span>':''):'<span class="nm">Unassigned</span>')+'</span></button>';
+  });
+  return h+'</div></section>';
+}
+function hoursHTML(){
+  var p=cur();if(!p)return emptyPeriodHTML('Hours are counted once a schedule has been built.');
+  var slots=buildSlots(p),rows=tally(p,slots);
+  var tot=rows.map(function(r){return r.total}),n=rows.length||1;
+  var sum=tot.reduce(function(a,b){return a+b},0),avg=sum/n,mx=Math.max.apply(null,tot.concat([0])),mn=tot.length?Math.min.apply(null,tot):0;
+  var h='<div class="readouts"><div class="ro"><div class="k">Average</div><div class="v">'+fh(avg)+'h</div></div><div class="ro"><div class="k">Lowest</div><div class="v">'+fh(mn)+'h</div></div><div class="ro"><div class="k">Highest</div><div class="v">'+fh(mx)+'h</div></div><div class="ro"><div class="k">Gap, high to low</div><div class="v">'+fh(mx-mn)+'h</div></div></div>';
+  h+='<div class="toolbar"><span class="note">Hours count in full on the day a shift starts. The line marks the average.'+(S.view==='public'?'':' Restricted people are marked *.')+'</span>'+(DL&&S.view==='admin'?'<button type="button" class="btn small" data-act="export-hours">Export CSV</button>':'')+'</div>';
+  h+='<div class="hours">';
+  rows.slice().sort(function(a,b){return b.total-a.total}).forEach(function(r){
+    var w=r.w,restricted=chipsFor(w).length>0,dev=r.total-avg;
+    h+='<div class="hr'+(restricted?' restricted':'')+'"><div class="hname"><span class="n"><i class="dot" style="--wh:'+hue(p,w.id)+'"></i>'+esc(w.name)+'</span>'+
+      '<span class="sub">'+r.count+' shifts · weekday '+fh(r.weekday)+'h · weekend/holiday '+fh(r.special)+'h · overnight '+fh(r.night)+'h'+(restricted?' · '+esc(chipsFor(w).join(', ')):'')+'</span></div>'+
+      '<div class="hbar" aria-hidden="true"><div class="fill" style="--wh:'+hue(p,w.id)+';width:'+(mx?r.total/mx*100:0).toFixed(1)+'%"></div><div class="mean" style="left:'+(mx?avg/mx*100:0).toFixed(1)+'%"></div></div>'+
+      '<div class="hnum">'+fh(r.total)+'</div><div class="hdev">'+(dev>=0?'+':'−')+fh(Math.abs(dev))+'</div></div>';
+  });
+  return h+'</div>';
+}
+function workerRowSetup(w,d){
+  var on=d.avail.indexOf(w.id)>=0,offs=d.daysOff[w.id]||[],open=S.expanded[w.id];
+  var h='<div class="wrow"><div class="wmain"><label class="chk"><input type="checkbox" data-bind="avail" data-id="'+esc(w.id)+'"'+(on?' checked':'')+'><i class="dot" style="--wh:'+hueR(w.id)+'"></i><span>'+esc(w.name)+'</span></label>'+
+    chipsFor(w).map(function(c){return '<span class="chip accent">'+esc(c)+'</span>'}).join('')+'</div>'+
+    '<div class="wacts">'+(on?'<button type="button" class="link" data-act="toggle-off" data-id="'+esc(w.id)+'" aria-expanded="'+(!!open)+'">Days off ('+offs.length+')</button>':'')+
+    '<button type="button" class="link" data-act="edit-worker" data-id="'+esc(w.id)+'">Edit</button></div>';
+  if(on&&open){
+    h+='<div class="offbox"><div class="field"><label for="off-'+esc(w.id)+'">Unavailable on</label><input type="date" id="off-'+esc(w.id)+'" min="'+periodStart(S.pid)+'" max="'+periodEnd(S.pid)+'"></div>'+
+      '<button type="button" class="btn small" data-act="add-off" data-id="'+esc(w.id)+'">Add day off</button>'+
+      '<div class="chips">'+(offs.length?offs.slice().sort().map(function(x){return '<span class="offchip">'+esc(fmtLong(x))+'<button type="button" data-act="rm-off" data-id="'+esc(w.id)+'" data-date="'+x+'" aria-label="Remove '+esc(fmtLong(x))+'">×</button></span>'}).join(''):'<span class="note">No days off entered.</span>')+'</div></div>';
+  }
+  return h+'</div>';
+}
+function setupHTML(){
+  var d=S.draft;if(!d)return '';
+  var p=cur(),avail=S.roster.workers.filter(function(w){return d.avail.indexOf(w.id)>=0});
+  var h='<section class="step"><h2><span class="stepn">Step 1</span>Who is available this period?</h2><p class="note">Tick everyone who can work from '+esc(fmtShort(periodStart(S.pid)))+' to '+esc(fmtShort(periodEnd(S.pid)))+'. Your saved team is listed here, so you only add a person once.</p>';
+  if(!S.roster.workers.length){
+    h+='<div class="empty-state"><h2>Your team is empty</h2><p>Add each scientist once, with any restrictions. They stay saved for every future period.</p><div class="row" style="justify-content:center"><button type="button" class="btn primary" data-act="new-worker">Add a scientist</button><button type="button" class="btn" data-act="load-example">Load an example team of 9</button></div></div>';
+  }else{
+    h+='<div class="row" style="margin-bottom:.4rem"><button type="button" class="btn small" data-act="sel-all">Select all</button><button type="button" class="btn small" data-act="sel-last">Same as last period</button><button type="button" class="btn small" data-act="sel-none">Clear</button><span class="grow"></span><button type="button" class="btn small" data-act="new-worker">Add a scientist</button></div>';
+    h+='<div class="wlist">'+S.roster.workers.map(function(w){return workerRowSetup(w,d)}).join('')+'</div>';
+  }
+  h+='</section>';
+  var hs=d.hol;
+  h+='<section class="step"><h2><span class="stepn">Step 2</span>Public holidays</h2><p class="note">A holiday that falls Monday to Friday is covered by 3 people (morning 4h, day 12h, night 12h) instead of 2. Pick the three here, or leave them on Auto. Holidays on a weekend keep the normal weekend cover.</p>';
+  if(!hs.length)h+='<p class="note">No Jamaican public holidays fall in this period.</p>';
+  hs.forEach(function(x,i){
+    var wd=dow(x.date)!==0&&dow(x.date)!==6;
+    h+='<div class="hol"><div class="row"><label class="chk"><input type="checkbox" data-bind="hol-on" data-i="'+i+'"'+(x.on?' checked':'')+'><span>'+esc(x.name)+'</span></label><span class="mono muted">'+esc(fmtLong(x.date))+'</span>'+
+      (wd?'<span class="chip accent">Weekday · 3 people</span>':'<span class="chip">Weekend · normal cover</span>')+'</div>';
+    if(x.on&&wd){
+      var labels=['Morning 8:30 AM–12:30 PM (4h)','Day 8:30 AM–8:30 PM (12h)','Night 8:30 PM–8:30 AM (12h)'];
+      h+='<div class="pins">'+labels.map(function(l,k){
+        return '<div class="field"><label for="pin-'+i+'-'+k+'">'+l+'</label><select id="pin-'+i+'-'+k+'" data-bind="pin" data-i="'+i+'" data-k="'+k+'"><option value="">Auto</option>'+
+          avail.map(function(w){return '<option value="'+esc(w.id)+'"'+(x.pins[k]===w.id?' selected':'')+'>'+esc(w.name)+'</option>'}).join('')+'</select></div>'}).join('')+'</div>';
+    }
+    h+='</div>';
+  });
+  h+='<div class="row" style="margin-top:.8rem"><div class="field"><label for="hol-date">Add another holiday</label><input type="date" id="hol-date" min="'+periodStart(S.pid)+'" max="'+periodEnd(S.pid)+'"></div><div class="field"><label for="hol-name">Name</label><input type="text" id="hol-name" placeholder="Declared holiday"></div><button type="button" class="btn small" data-act="add-hol" style="align-self:flex-end">Add</button></div></section>';
+  var hset={};hs.forEach(function(x){if(x.on)hset[x.date]=1});
+  var cnt={weekday:0,weekend:0,holiday:0},hrs=0;
+  periodDates(S.pid).forEach(function(dt){var t=dayType(dt,hset);cnt[t]++;TEMPLATES[t].forEach(function(s){hrs+=s.h})});
+  h+='<section class="step"><h2><span class="stepn">Step 3</span>Build the schedule</h2>'+
+    '<div class="summary"><span><b>'+avail.length+'</b> people available</span><span><b>'+cnt.weekday+'</b> weekdays · <b>'+cnt.weekend+'</b> weekend days · <b>'+cnt.holiday+'</b> holidays</span><span><b>'+hrs+'h</b> to cover</span><span><b>'+(avail.length?fh(hrs/avail.length):'0')+'h</b> each if split evenly</span></div>';
+  if(avail.length&&avail.length<5)h+='<p class="note" style="margin-bottom:.8rem">Weekends need 4 people a day, so with fewer than 5 available some shifts may go unfilled or break rest rules.</p>';
+  h+='<div class="row"><button type="button" class="btn primary" data-act="build"'+(avail.length?'':' disabled')+'>'+(p?'Rebuild schedule':'Build schedule')+'</button>';
+  if(p)h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="clear-pins"'+(S.clearPins?' checked':'')+'>Also clear pinned shifts</label>';
+  return h+'</div></section>';
+}
+function teamHTML(){
+  var h='<div class="toolbar"><span class="note">Everyone saved here is offered at the start of each period. Restrictions apply whenever the person is available.</span><button type="button" class="btn primary" data-act="new-worker">Add a scientist</button></div>';
+  if(!S.roster.workers.length)return h+'<div class="empty-state"><h2>No one saved yet</h2><p>Add each scientist once. Mark anyone who can only work 4-hour shifts, only certain weekdays, or only between 8:30am and 8:30pm.</p><button type="button" class="btn" data-act="load-example">Load an example team of 9</button></div>';
+  h+='<section class="step"><div class="wlist">'+S.roster.workers.map(function(w){
+    return '<div class="wrow"><div class="wmain"><i class="dot" style="--wh:'+hueR(w.id)+'"></i><b>'+esc(w.name)+'</b>'+(chipsFor(w).length?chipsFor(w).map(function(c){return '<span class="chip accent">'+esc(c)+'</span>'}).join(''):'<span class="muted" style="font-size:.85rem">No restrictions</span>')+'</div><div class="wacts"><button type="button" class="link" data-act="edit-worker" data-id="'+esc(w.id)+'">Edit</button></div></div>'}).join('')+'</div></section>';
+  return h;
+}
+function render(){
+  var y=window.scrollY,app=document.getElementById('app'),body='';
+  app.className='wrap'+(S.view==='public'?' pubview':'');
+  if(S.view==='public'){renderPublic();return}
+  if(S.gate!=='open'){renderGate();return}
+  if(!S.ready)body='<div class="empty-state"><h2>Loading your saved rota…</h2><p>Your team and past schedules appear here in a moment.</p></div>';
+  else if(S.tab==='schedule')body=scheduleHTML();
+  else if(S.tab==='hours')body=hoursHTML();
+  else if(S.tab==='setup')body=setupHTML();
+  else body=teamHTML();
+  app.innerHTML=headerHTML()+'<main>'+body+'</main>';
+  renderModal();
+  window.scrollTo(0,y);
+}
+function renderModal(){
+  var root=document.getElementById('modal-root'),m=S.modal;
+  if(!m){root.innerHTML='';return}
+  var h='';
+  if(m.type==='shift')h=shiftModalHTML();else h=workerModalHTML();
+  root.innerHTML='<div class="backdrop"><div class="panel" role="dialog" aria-modal="true" tabindex="-1" id="panel">'+h+'</div></div>';
+  var f=root.querySelector('[data-autofocus]')||document.getElementById('panel');if(f&&f.focus)f.focus({preventScroll:true});
+}
+function shiftModalHTML(){
+  var p=cur(),slots=buildSlots(p),s=slots.filter(function(x){return x.key===S.modal.key})[0];
+  if(!s)return '';
+  var e=p.slots[s.key],curId=e&&e.w,rows=tally(p,slots),hrs={};
+  rows.forEach(function(r){hrs[r.w.id]=r.total});
+  var list=p.workers.map(function(w){return {w:w,why:workerReasons(p,slots,w,s),h:hrs[w.id]||0}});
+  list.sort(function(a,b){return (a.why.length?1:0)-(b.why.length?1:0)||a.h-b.h});
+  var bestId=null;list.forEach(function(x){if(!bestId&&!x.why.length&&x.w.id!==curId)bestId=x.w.id});
+  var h='<div><h2>'+esc(s.label)+' shift'+(s.holidayName?' · '+esc(s.holidayName):'')+'</h2><div class="sub">'+esc(fmtLong(s.date))+' · '+s.startClock+'–'+s.endClock+(s.overnight?' next day':'')+' · '+s.hours+'h</div></div>';
+  h+='<div class="cands">'+list.map(function(x){
+    var isCur=x.w.id===curId,after=isCur?x.h:x.h+s.hours;
+    return '<button type="button" class="cand'+(isCur?' cur':'')+(x.why.length?' blocked':'')+'" data-act="assign" data-id="'+esc(x.w.id)+'"><span class="nm"><i class="dot" style="--wh:'+hue(p,x.w.id)+'"></i>'+esc(x.w.name)+
+      (isCur?' <span class="chip accent">Assigned</span>':(x.w.id===bestId?' <span class="chip">Fewest hours</span>':''))+'</span><span class="hh">'+(isCur?fh(x.h)+'h':fh(x.h)+'h → '+fh(after)+'h')+'</span>'+
+      (x.why.length?'<span class="why">'+esc(x.why.join('; '))+(isCur?'':' (you can still assign)')+'</span>':'')+'</button>';
+  }).join('')+'</div>';
+  h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="pin-toggle"'+(S.modal.pin?' checked':'')+'>Pin this change so rebuilding keeps it</label>';
+  h+='<div class="row" style="justify-content:space-between"><button type="button" class="btn danger" data-act="unassign"'+(curId?'':' disabled')+'>Leave unassigned</button><button type="button" class="btn" data-act="close-modal" data-autofocus>Close</button></div>';
+  return h;
+}
+function workerModalHTML(){
+  var m=S.modal,d=m.draft,order=[1,2,3,4,5,6,0];
+  var h='<div><h2>'+(m.id?'Edit scientist':'Add a scientist')+'</h2></div>';
+  h+='<div class="field"><label for="wname">Name</label><input type="text" id="wname" data-bind="wname" value="'+esc(d.name)+'" autocomplete="off" data-autofocus></div>';
+  h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-short"'+(d.onlyShort?' checked':'')+'>Only 4-hour shifts</label>';
+  h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-12"'+(d.only12?' checked':'')+'>Only 12-hour shifts (weekend and holiday day or night)</label>';
+  h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-16"'+(d.only16?' checked':'')+'>Only 16-hour shifts (weekday overnight)</label>';
+  h+='<span class="note">Tick both 12-hour and 16-hour to allow long shifts only. These cannot be combined with 4-hour only.</span>';
+  h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-day"'+(d.daytimeOnly?' checked':'')+'>Only between 8:30am and 8:30pm</label>';
+  h+='<div class="field" style="max-width:14rem"><label for="wmax">Maximum hours per period</label><input type="text" inputmode="numeric" id="wmax" data-bind="wmax" value="'+esc(d.maxHours)+'" placeholder="No limit" autocomplete="off"></div>';
+  h+='<div><div class="lbl" style="margin-bottom:.35rem" id="dp-l">Can work on</div><div class="daypick" role="group" aria-labelledby="dp-l">'+order.map(function(x){return '<button type="button" data-act="wk-day" data-d="'+x+'" aria-pressed="'+(d.days.indexOf(x)>=0)+'">'+DOW[x]+'</button>'}).join('')+'</div></div>';
+  if(m.err)h+='<div class="err">'+esc(m.err)+'</div>';
+  h+='<div class="row" style="justify-content:space-between">'+(m.id?(m.confirm?'<button type="button" class="btn danger" data-act="delete-worker">Confirm remove</button>':'<button type="button" class="btn" data-act="ask-delete">Remove from team</button>'):'<span></span>')+
+    '<span class="row"><button type="button" class="btn" data-act="close-modal">Cancel</button><button type="button" class="btn primary" data-act="save-worker">Save</button></span></div>';
+  if(m.confirm)h+='<span class="note">Removing someone keeps them on schedules you already built.</span>';
+  return h;
+}
+
+/* ---------- state changes ---------- */
+function initDraft(){
+  var p=cur(),ids=S.roster.workers.map(function(w){return w.id});
+  var d={pid:S.pid,avail:[],daysOff:{},hol:holidaysInPeriod(S.pid)};
+  if(p){
+    d.avail=p.workers.map(function(w){return w.id}).filter(function(id){return ids.indexOf(id)>=0});
+    p.workers.forEach(function(w){if(w.daysOff&&w.daysOff.length)d.daysOff[w.id]=w.daysOff.slice()});
+    var saved={};(p.holidays||[]).forEach(function(x){saved[x.date]=x});
+    d.hol.forEach(function(x){if(saved[x.date])x.on=saved[x.date].on!==false});
+    (p.holidays||[]).forEach(function(x){if(!d.hol.some(function(y){return y.date===x.date}))d.hol.push({date:x.date,name:x.name,on:x.on!==false,pins:[null,null,null]})});
+    ['A','B','C'].forEach(function(id,k){d.hol.forEach(function(x){var e=p.slots[x.date+'|'+id];if(e&&e.l&&e.w&&holidaySet(p)[x.date])x.pins[k]=e.w})});
+    d.hol.sort(function(a,b){return a.date<b.date?-1:1});
+  }else{
+    var last=S.roster.lastAvailable.filter(function(id){return ids.indexOf(id)>=0});
+    d.avail=last.length?last:ids.slice();
+  }
+  S.draft=d;
+}
+function goPeriod(pid){
+  S.pid=pid;S.hl='';S.draft=null;S.expanded={};
+  S.tab=S.periods[pid]?'schedule':'setup';
+  if(S.tab==='setup')initDraft();
+  render();window.scrollTo(0,0);
+}
+function setTab(t){
+  S.tab=t;
+  if(t==='setup'&&(!S.draft||S.draft.pid!==S.pid))initDraft();
+  render();
+}
+function buildPeriod(){
+  var d=S.draft,old=cur(),pid=S.pid;
+  var workers=S.roster.workers.filter(function(w){return d.avail.indexOf(w.id)>=0}).map(function(w){
+    return {id:w.id,name:w.name,onlyShort:!!w.onlyShort,only12:!!w.only12,only16:!!w.only16,days:w.days&&w.days.length&&w.days.length<7?w.days.slice():null,daytimeOnly:!!w.daytimeOnly,maxHours:w.maxHours>0?w.maxHours:null,daysOff:(d.daysOff[w.id]||[]).slice().sort()};
+  });
+  if(!workers.length){toast('Tick at least one available person first.');return}
+  var p={id:pid,start:periodStart(pid),end:periodEnd(pid),workers:workers,
+    holidays:d.hol.map(function(x){return {date:x.date,name:x.name,on:!!x.on}}),slots:{}};
+  var keep=old&&!S.clearPins?old.slots:{},slots=buildSlots(p),ok={};
+  slots.forEach(function(s){ok[s.key]=1});
+  Object.keys(keep).forEach(function(k){var e=keep[k];if(ok[k]&&e&&e.l&&e.w&&workers.some(function(w){return w.id===e.w}))p.slots[k]={w:e.w,l:1}});
+  d.hol.forEach(function(x){
+    if(!x.on||dow(x.date)===0||dow(x.date)===6)return;
+    ['A','B','C'].forEach(function(id,k){if(x.pins[k]&&workers.some(function(w){return w.id===x.pins[k]}))p.slots[x.date+'|'+id]={w:x.pins[k],l:1}});
+  });
+  var prevSlots=old?clone(old.slots):null;
+  var res=generateSchedule(p);
+  p.slots=res.slots;p.unfilled=res.unfilled;p.relaxed=res.relaxed;p.builtAt=new Date().toISOString();
+  S.undo=prevSlots?{pid:pid,slots:prevSlots,workers:clone(old.workers),holidays:clone(old.holidays)}:null;
+  S.periods[pid]=p;S.roster.lastAvailable=d.avail.slice();S.clearPins=false;
+  savePeriod(p);saveRoster();
+  S.tab='schedule';S.draft=null;render();window.scrollTo(0,0);
+  toast(res.unfilled?'Built, but '+res.unfilled+' shift'+(res.unfilled===1?'':'s')+' could not be filled.':'Schedule built.');
+}
+function rerun(lockAll){
+  var p=cur();if(!p)return;
+  S.undo={pid:p.id,slots:clone(p.slots),workers:clone(p.workers),holidays:clone(p.holidays)};
+  var res=generateSchedule(p,{lockAll:lockAll});
+  p.slots=res.slots;p.unfilled=res.unfilled;p.relaxed=res.relaxed;
+  savePeriod(p);render();
+  toast(res.unfilled?res.unfilled+' shift'+(res.unfilled===1?'':'s')+' still unfilled.':(lockAll?'Empty shifts filled.':'Unpinned shifts rebuilt.'),'Undo',doUndo);
+}
+function doUndo(){
+  var u=S.undo,p=cur();if(!u||!p||u.pid!==p.id)return;
+  p.slots=u.slots;p.workers=u.workers;p.holidays=u.holidays;S.undo=null;savePeriod(p);render();
+}
+function assign(wid){
+  var p=cur(),k=S.modal.key,e=p.slots[k]||{};
+  if(e.w===wid){closeModal();return}
+  p.slots[k]=S.modal.pin?{w:wid,l:1}:{w:wid};
+  savePeriod(p);closeModal();render();
+}
+function csvCell(v){v=String(v==null?'':v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
+async function exportCSV(kind){
+  var p=cur();if(!p||!DL)return;
+  var slots=buildSlots(p),lines,name;
+  if(kind==='sched'){
+    lines=[['Date','Day','Shift type','Shift','Start','End','Hours','Scientist']];
+    slots.slice().sort(function(a,b){return a.startMin-b.startMin}).forEach(function(s){
+      var e=p.slots[s.key],w=e&&e.w?p.workers.filter(function(x){return x.id===e.w})[0]:null;
+      lines.push([s.date,DOW[dow(s.date)],s.type,s.label,s.startClock,s.endClock,s.hours,w?w.name:'UNASSIGNED']);
+    });
+    name='schedule-'+p.id+'.csv';
+  }else{
+    lines=[['Scientist','Total hours','Shifts','Weekday hours','Weekend and holiday hours','Overnight hours']];
+    tally(p,slots).forEach(function(r){lines.push([r.w.name,r.total,r.count,r.weekday,r.special,r.night])});
+    name='hours-'+p.id+'.csv';
+  }
+  try{await DL.save({filename:name,data:lines.map(function(l){return l.map(csvCell).join(',')}).join('\n')});toast('File saved.')}
+  catch(err){if(!err||err.code!=='declined')toast('Could not save the file here.')}
+}
+
+/* ---------- public view (what visitors see) ---------- */
+async function loadSnap(){
+  var d=null;
+  try{var r=await fetch('schedule.json',{cache:'no-store'});if(r.ok)d=await r.json()}catch(e){d=null}
+  if(!d){try{d=JSON.parse(document.getElementById('snap').textContent||'{}')}catch(e){d={}}}
+  S.pub=(d&&d.periods)||{};S.pubAt=(d&&d.at)||null;
+}
+function pickPubPid(){
+  var want=periodIdFor(todayStr()),ids=Object.keys(S.pub).sort();
+  if(S.pub[want]||!ids.length)return want;
+  var earlier=ids.filter(function(i){return i<=want});return earlier.length?earlier[earlier.length-1]:ids[0];
+}
+function publicHeaderHTML(){
+  var tabs=[['schedule','Schedule'],['hours','Hours'],['mine','By scientist']];
+  return '<header><div class="brandline"><span><b>Bench Rota</b> · clinical laboratory shifts</span><span class="store">'+(S.pubAt?'Updated '+esc(fmtShort(S.pubAt.slice(0,10))):'')+'</span></div>'+
+    '<div class="pnav"><button type="button" class="iconbtn" data-act="ppprev" aria-label="Previous period">'+ICON.prev+'</button>'+
+    '<div class="plabel"><h1>'+esc(periodLabel(S.pid))+'</h1><div class="pmeta"><span>26th to 25th</span></div></div>'+
+    '<button type="button" class="iconbtn" data-act="ppnext" aria-label="Next period">'+ICON.next+'</button></div>'+
+    '<nav class="tabs" role="tablist" aria-label="Sections">'+tabs.map(function(t){
+      return '<button type="button" role="tab" class="tab" data-act="ptab" data-tab="'+t[0]+'" aria-selected="'+(S.ptab===t[0])+'">'+t[1]+'</button>'}).join('')+'</nav></header>';
+}
+function publicScheduleHTML(){
+  var p=cur();if(!p)return emptyPeriodHTML();
+  var slots=buildSlots(p),val={issues:{},unfilled:[]},h='';
+  var opts='<option value="">Everyone</option>'+p.workers.map(function(w){return '<option value="'+esc(w.id)+'"'+(S.hl===w.id?' selected':'')+'>'+esc(w.name)+'</option>'}).join('');
+  h+='<div class="toolbar"><div class="grp"><div class="field"><label for="hl">Highlight</label><select id="hl" data-bind="hl">'+opts+'</select></div></div></div>';
+  h+='<div class="legend"><span><i class="sw" style="background:var(--day)"></i>Day shift</span><span><i class="sw" style="background:var(--night)"></i>Overnight</span><span>Bars sit on a lab day that runs 8:30 AM to 8:30 AM</span></div>';
+  var byDay={};slots.forEach(function(s){(byDay[s.date]=byDay[s.date]||[]).push(s)});
+  var dates=periodDates(p.id),i=0;
+  while(i<dates.length){
+    var j=i+1;while(j<dates.length&&dow(dates[j])!==1)j++;
+    h+='<h3 class="wk">'+esc(fmtShort(dates[i]))+' – '+esc(fmtShort(dates[j-1]))+'</h3>';
+    for(var d=i;d<j;d++)h+=dayHTML(p,dates[d],byDay[dates[d]],val);
+    i=j;
+  }
+  return h;
+}
+function publicMineHTML(){
+  var p=cur();if(!p)return emptyPeriodHTML();
+  var slots=buildSlots(p),names=p.workers.slice().sort(function(a,b){return a.name.localeCompare(b.name)});
+  var h='<div class="toolbar"><div class="field"><label for="who">Choose a scientist</label><select id="who" data-bind="who"><option value="">Select a name…</option>'+
+    names.map(function(w){return '<option value="'+esc(w.id)+'"'+(S.who===w.id?' selected':'')+'>'+esc(w.name)+'</option>'}).join('')+'</select></div></div>';
+  var w=p.workers.filter(function(x){return x.id===S.who})[0];
+  if(!w)return h+'<p class="note">Pick a name to see that scientist’s own schedule for this period. Other scientists’ shifts are not shown here.</p>';
+  var mine=slots.filter(function(s){var e=p.slots[s.key];return e&&e.w===w.id}).sort(function(a,b){return a.startMin-b.startMin});
+  var r=tally(p,slots).filter(function(x){return x.w.id===w.id})[0];
+  h+='<div class="readouts">'+[['Total hours',fh(r.total)+'h'],['Shifts',r.count],['Weekday',fh(r.weekday)+'h'],['Weekend / holiday',fh(r.special)+'h'],['Overnight',fh(r.night)+'h']].map(function(k){return '<div class="ro"><div class="k">'+k[0]+'</div><div class="v">'+k[1]+'</div></div>'}).join('')+'</div>';
+  if(!mine.length)return h+'<p class="note">'+esc(w.name)+' has no shifts in this period.</p>';
+  return h+'<div class="mine">'+mine.map(function(s){
+    return '<div class="mrow"><div class="mdate"><b>'+esc(fmtLong(s.date))+'</b>'+(s.holidayName?'<span class="chip accent">'+esc(s.holidayName)+'</span>':'')+'</div><div class="mono">'+s.startClock+'–'+s.endClock+(s.overnight?' <span class="muted">+1 day</span>':'')+'</div><div class="muted">'+esc(s.label)+'</div><div class="mono mh">'+s.hours+'h</div></div>'}).join('')+'</div>';
+}
+function renderPublic(){
+  var y=window.scrollY,body=S.ptab==='hours'?hoursHTML():(S.ptab==='mine'?publicMineHTML():publicScheduleHTML());
+  document.getElementById('modal-root').innerHTML='';
+  document.getElementById('app').innerHTML=publicHeaderHTML()+'<main>'+body+'</main><footer class="pubfoot"><button type="button" class="link" data-act="go-admin">Admin sign in</button></footer>';
+  window.scrollTo(0,y);
+}
+
+/* ---------- admin password gate ---------- */
+async function sha(s){var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0')}).join('')}
+function pwv(id){var el=document.getElementById(id);return el?el.value:''}
+function gateHTML(){
+  var g=S.gate,err=S.gateErr?'<div class="err">'+esc(S.gateErr)+'</div>':'';
+  var back='<button type="button" class="link" data-act="to-public" style="align-self:flex-start">Back to public view</button>';
+  function pw(id,l,ac){return '<div class="field"><label for="'+id+'">'+l+'</label><input type="password" id="'+id+'" autocomplete="'+ac+'"></div>'}
+  if(g==='loading')return '<div class="empty-state"><h2>Loading…</h2></div>';
+  if(g==='noadmin')return '<section class="step gate"><h2>Admin not available</h2><p class="note">The admin password has not been created yet. The page owner needs to open this page while signed in to claude.ai and create it.</p>'+back+'</section>';
+  if(g==='setup')return '<section class="step gate"><h2>Create the admin password</h2><p class="note">Use at least 6 characters. It is stored only in this browser, so it keeps casual visitors out of the admin screen but is not strong security.</p>'+pw('pw1','New password','new-password')+pw('pw2','Repeat password','new-password')+err+'<button type="button" class="btn primary" data-act="setup-pw">Create password</button>'+back+'</section>';
+  if(g==='change')return '<section class="step gate"><h2>Change password</h2>'+pw('pw0','Current password','current-password')+pw('pw1','New password','new-password')+pw('pw2','Repeat new password','new-password')+err+'<div class="row"><button type="button" class="btn primary" data-act="save-pw">Save</button><button type="button" class="btn" data-act="cancel-pw">Cancel</button></div></section>';
+  return '<section class="step gate"><h2>Admin sign in</h2><p class="note">Enter the password to edit the rota.</p>'+pw('pw1','Password','current-password')+err+'<button type="button" class="btn primary" data-act="login">Sign in</button>'+back+'</section>';
+}
+function renderGate(){
+  document.getElementById('modal-root').innerHTML='';
+  document.getElementById('app').innerHTML='<header><div class="brandline"><span><b>Bench Rota</b> · admin</span></div></header><main>'+gateHTML()+'</main>';
+  var f=document.querySelector('#app input');if(f)f.focus({preventScroll:true});
+}
+function saveAuth(){return persist('settings/auth',S.auth)}
+async function loadAuth(){
+  var a=null;
+  try{if(DB){var d=await DB.doc('settings/auth').get();a=d.exists?clone(d.data()):null}else a=lsGet('settings/auth')}catch(e){a=null}
+  S.auth=a&&a.hash?a:null;
+}
+function afterUnlock(){
+  S.pid=periodIdFor(addDays(todayStr(),10));S.hl='';S.draft=null;S.expanded={};
+  S.tab=S.periods[S.pid]?'schedule':'setup';
+  if(S.tab==='setup')initDraft();
+}
+function unlock(){
+  S.unlocked=true;S.gate='open';S.gateErr=null;
+  try{sessionStorage.setItem('benchrota:unlocked','1')}catch(e){}
+  afterUnlock();render();window.scrollTo(0,0);
+}
+function leaveAdmin(){
+  S.view='public';S.modal=null;S.hl='';S.pid=pickPubPid();
+  try{sessionStorage.removeItem('benchrota:admin')}catch(e){}
+  render();window.scrollTo(0,0);
+}
+function withTimeout(pr,ms){return Promise.race([pr,new Promise(function(r){setTimeout(function(){r(null)},ms)})])}
+function saveBlob(name,text,type){
+  var a=document.createElement('a'),u=URL.createObjectURL(new Blob([text],{type:type||'text/plain'}));
+  a.href=u;a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(function(){URL.revokeObjectURL(u);a.remove()},500);
+}
+async function initBackend(){
+  DB=null;U=null;
+  DL={save:function(o){saveBlob(o.filename,o.data,'text/csv');return Promise.resolve()}};
+  S.mode='local';
+  try{await loadAll()}catch(err){try{console.error(err)}catch(e){}}
+  S.ready=true;S.backendReady=true;
+}
+async function enterAdmin(){
+  S.view='admin';S.gate='loading';S.gateErr=null;render();
+  try{sessionStorage.setItem('benchrota:admin','1')}catch(e){}
+  if(!S.backendReady)await initBackend();
+  await loadAuth();
+  var was=false;try{was=sessionStorage.getItem('benchrota:unlocked')==='1'}catch(e){}
+  if(S.auth&&was){unlock();return}
+  S.gate=S.auth?'login':'setup';
+  render();
+}
+function buildSnapshot(){
+  var snap={at:new Date().toISOString(),periods:{}};
+  Object.keys(S.periods).forEach(function(id){var p=S.periods[id];
+    snap.periods[id]={id:id,workers:p.workers.map(function(w){return {id:w.id,name:w.name}}),holidays:p.holidays||[],slots:p.slots}});
+  return snap;
+}
+function publishPublic(){
+  saveBlob('schedule.json',JSON.stringify(buildSnapshot(),null,1),'application/json');
+  toast('schedule.json downloaded. Upload it to the repository to update the public page.');
+}
+function backupAll(){
+  saveBlob('bench-rota-backup-'+todayStr()+'.json',JSON.stringify({kind:'bench-rota-backup',version:1,roster:S.roster,periods:S.periods},null,1),'application/json');
+  toast('Backup downloaded. Keep it private: it includes restrictions.');
+}
+function restoreFrom(file){
+  var r=new FileReader();
+  r.onload=function(){
+    try{
+      var d=JSON.parse(r.result);
+      if(d.kind!=='bench-rota-backup'||!d.periods)throw new Error('bad');
+      if(d.roster&&d.roster.workers){S.roster={workers:d.roster.workers,lastAvailable:d.roster.lastAvailable||[]};saveRoster()}
+      Object.keys(d.periods).forEach(function(id){var p=d.periods[id];if(p&&p.id){S.periods[p.id]=p;savePeriod(p)}});
+      afterUnlock();render();toast('Backup restored.');
+    }catch(e){toast('That file is not a Bench Rota backup.')}
+  };
+  r.readAsText(file);
+}
+
+/* ---------- events ---------- */
+var ACT={
+  ptab:function(el){S.ptab=el.dataset.tab;render()},
+  ppprev:function(){S.pid=shiftPeriodId(S.pid,-1);S.hl='';render();window.scrollTo(0,0)},
+  ppnext:function(){S.pid=shiftPeriodId(S.pid,1);S.hl='';render();window.scrollTo(0,0)},
+  'go-admin':function(){enterAdmin()},
+  'to-public':function(){leaveAdmin()},
+  lock:function(){S.unlocked=false;try{sessionStorage.removeItem('benchrota:unlocked')}catch(e){}leaveAdmin()},
+  login:async function(){
+    var v=pwv('pw1');if(!S.auth)return;
+    if(await sha((S.auth.salt||'')+v)!==S.auth.hash){S.gateErr='Incorrect password.';render();return}
+    unlock();
+  },
+  'setup-pw':async function(){
+    var a=pwv('pw1'),b=pwv('pw2');
+    if(a.length<6){S.gateErr='Use at least 6 characters.';render();return}
+    if(a!==b){S.gateErr='The two passwords do not match.';render();return}
+    var salt=uid();S.auth={salt:salt,hash:await sha(salt+a)};await saveAuth();unlock();
+  },
+  'change-pw-open':function(){S.gate='change';S.gateErr=null;render()},
+  'cancel-pw':function(){S.gate='open';S.gateErr=null;render()},
+  'save-pw':async function(){
+    var o=pwv('pw0'),a=pwv('pw1'),b=pwv('pw2');
+    if(await sha((S.auth.salt||'')+o)!==S.auth.hash){S.gateErr='Current password is incorrect.';render();return}
+    if(a.length<6){S.gateErr='Use at least 6 characters.';render();return}
+    if(a!==b){S.gateErr='The two new passwords do not match.';render();return}
+    var salt=uid();S.auth={salt:salt,hash:await sha(salt+a)};await saveAuth();S.gate='open';S.gateErr=null;render();toast('Password changed.');
+  },
+  publish:function(){publishPublic()},
+  backup:function(){backupAll()},
+  restore:function(){var f=document.getElementById('restore-file');if(f)f.click()},
+  tab:function(el){setTab(el.dataset.tab)},
+  pprev:function(){goPeriod(shiftPeriodId(S.pid,-1))},
+  pnext:function(){goPeriod(shiftPeriodId(S.pid,1))},
+  shift:function(el){S.modal={type:'shift',key:el.dataset.key,pin:true};renderModal()},
+  'close-modal':closeModal,
+  assign:function(el){assign(el.dataset.id)},
+  unassign:function(){var p=cur();delete p.slots[S.modal.key];savePeriod(p);closeModal();render()},
+  'new-worker':function(){S.modal={type:'worker',id:null,draft:{name:'',onlyShort:false,only12:false,only16:false,daytimeOnly:false,maxHours:'',days:[0,1,2,3,4,5,6]}};renderModal()},
+  'edit-worker':function(el){
+    var w=S.roster.workers.filter(function(x){return x.id===el.dataset.id})[0];if(!w)return;
+    S.modal={type:'worker',id:w.id,draft:{name:w.name,onlyShort:!!w.onlyShort,only12:!!w.only12,only16:!!w.only16,daytimeOnly:!!w.daytimeOnly,maxHours:w.maxHours>0?String(w.maxHours):'',days:w.days&&w.days.length?w.days.slice():[0,1,2,3,4,5,6]}};renderModal();
+  },
+  'wk-day':function(el){
+    var d=S.modal.draft,x=Number(el.dataset.d),i=d.days.indexOf(x);
+    if(i>=0)d.days.splice(i,1);else d.days.push(x);
+    S.modal.err=null;renderModal();
+  },
+  'save-worker':function(){
+    var m=S.modal,d=m.draft,name=d.name.trim();
+    if(!name){m.err='Enter a name.';renderModal();return}
+    if(!d.days.length){m.err='Choose at least one day this person can work.';renderModal();return}
+    if(d.daytimeOnly&&d.only16&&!d.only12){m.err='16-hour shifts run overnight, so they cannot be combined with daytime only.';renderModal();return}
+    if(d.only16&&!d.only12&&!d.days.some(function(x){return x>=1&&x<=5})){m.err='16-hour shifts only happen Monday to Friday, so choose at least one weekday.';renderModal();return}
+    var mx=String(d.maxHours||'').trim();
+    if(mx&&!/^\d{1,3}$/.test(mx)||mx&&Number(mx)<1){m.err='Enter a whole number of hours, or leave it blank for no limit.';renderModal();return}
+    var rec={id:m.id||uid(),name:name,onlyShort:!!d.onlyShort,only12:!!d.only12,only16:!!d.only16,daytimeOnly:!!d.daytimeOnly,maxHours:mx?Number(mx):null,days:d.days.length===7?null:d.days.slice()};
+    if(m.id){S.roster.workers=S.roster.workers.map(function(w){return w.id===m.id?rec:w})}
+    else{S.roster.workers.push(rec);if(S.draft)S.draft.avail.push(rec.id)}
+    saveRoster();S.modal=null;render();
+  },
+  'ask-delete':function(){S.modal.confirm=true;renderModal()},
+  'delete-worker':function(){
+    var id=S.modal.id;
+    S.roster.workers=S.roster.workers.filter(function(w){return w.id!==id});
+    S.roster.lastAvailable=S.roster.lastAvailable.filter(function(x){return x!==id});
+    if(S.draft)S.draft.avail=S.draft.avail.filter(function(x){return x!==id});
+    saveRoster();S.modal=null;render();
+  },
+  'toggle-off':function(el){S.expanded[el.dataset.id]=!S.expanded[el.dataset.id];render()},
+  'add-off':function(el){
+    var id=el.dataset.id,inp=document.getElementById('off-'+id),v=inp&&inp.value;
+    if(!v){toast('Pick a date first.');return}
+    if(v<periodStart(S.pid)||v>periodEnd(S.pid)){toast('That date is outside this period.');return}
+    var a=S.draft.daysOff[id]=S.draft.daysOff[id]||[];if(a.indexOf(v)<0)a.push(v);render();
+  },
+  'rm-off':function(el){var a=S.draft.daysOff[el.dataset.id]||[];a.splice(a.indexOf(el.dataset.date),1);render()},
+  'sel-all':function(){S.draft.avail=S.roster.workers.map(function(w){return w.id});render()},
+  'sel-none':function(){S.draft.avail=[];render()},
+  'sel-last':function(){var ids=S.roster.workers.map(function(w){return w.id});S.draft.avail=S.roster.lastAvailable.filter(function(x){return ids.indexOf(x)>=0});render()},
+  'add-hol':function(){
+    var dt=document.getElementById('hol-date').value,nm=document.getElementById('hol-name').value.trim()||'Declared holiday';
+    if(!dt){toast('Pick the holiday date first.');return}
+    if(dt<periodStart(S.pid)||dt>periodEnd(S.pid)){toast('That date is outside this period.');return}
+    var ex=S.draft.hol.filter(function(x){return x.date===dt})[0];
+    if(ex){ex.on=true}else{S.draft.hol.push({date:dt,name:nm,on:true,pins:[null,null,null]});S.draft.hol.sort(function(a,b){return a.date<b.date?-1:1})}
+    render();
+  },
+  build:buildPeriod,
+  rebuild:function(){rerun(false)},
+  fill:function(){rerun(true)},
+  undo:function(){doUndo()},
+  'export-sched':function(){exportCSV('sched')},
+  'export-hours':function(){exportCSV('hours')},
+  'load-example':function(){
+    var names=['Example 1','Example 2','Example 3','Example 4','Example 5','Example 6','Example 7','Example 8','Example 9'];
+    S.roster.workers=names.map(function(n,i){return {id:uid(),name:'Example scientist '+(i+1),onlyShort:i===6,daytimeOnly:i===7,days:i===7?[5,6]:null}});
+    saveRoster();if(S.draft)S.draft.avail=S.roster.workers.map(function(w){return w.id});
+    render();toast('Example team added. Rename or remove them under Team.');
+  }
+};
+document.addEventListener('click',function(e){
+  if(e.target.classList&&e.target.classList.contains('backdrop')){closeModal();return}
+  var el=e.target.closest('[data-act]');if(!el)return;
+  var a=el.dataset.act,okp={ptab:1,ppprev:1,ppnext:1,'go-admin':1},okg={login:1,'setup-pw':1,'to-public':1,'save-pw':1,'cancel-pw':1};
+  if(S.view==='public'&&!okp[a])return;
+  if(S.view==='admin'&&S.gate!=='open'&&!okg[a])return;
+  var f=ACT[a];if(f)f(el,e);
+});
+document.addEventListener('change',function(e){
+  var el=e.target,b=el.dataset&&el.dataset.bind;if(!b)return;
+  if(b==='avail'){
+    var a=S.draft.avail,id=el.dataset.id,i=a.indexOf(id);
+    if(el.checked&&i<0)a.push(id);if(!el.checked&&i>=0)a.splice(i,1);render();
+  }else if(b==='hol-on'){S.draft.hol[Number(el.dataset.i)].on=el.checked;render()}
+  else if(b==='pin'){S.draft.hol[Number(el.dataset.i)].pins[Number(el.dataset.k)]=el.value||null}
+  else if(b==='clear-pins'){S.clearPins=el.checked}
+  else if(b==='hl'){S.hl=el.value;render()}
+  else if(b==='who'){S.who=el.value;render()}
+  else if(b==='restore-file'){if(el.files&&el.files[0])restoreFrom(el.files[0]);el.value=''}
+  else if(b==='pin-toggle'){S.modal.pin=el.checked}
+  else if(b==='w-short'){var dd=S.modal.draft;dd.onlyShort=el.checked;if(el.checked){dd.only12=false;dd.only16=false}S.modal.err=null;renderModal()}
+  else if(b==='w-12'||b==='w-16'){var d2=S.modal.draft;d2[b==='w-12'?'only12':'only16']=el.checked;if(el.checked)d2.onlyShort=false;S.modal.err=null;renderModal()}
+  else if(b==='w-day'){S.modal.draft.daytimeOnly=el.checked}
+});
+document.addEventListener('input',function(e){
+  var el=e.target;if(!el.dataset)return;
+  if(el.dataset.bind==='wname'){S.modal.draft.name=el.value;S.modal.err=null}
+  else if(el.dataset.bind==='wmax'){S.modal.draft.maxHours=el.value;S.modal.err=null}
+});
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'&&S.modal)closeModal();
+  if(e.key==='Enter'&&S.view==='admin'&&S.gate!=='open'&&e.target.id&&/^pw[0-2]$/.test(e.target.id)){e.preventDefault();var b=document.querySelector('.gate .btn.primary');if(b)b.click()}
+  if(e.key==='Enter'&&S.modal&&S.modal.type==='worker'&&e.target.id==='wname'){e.preventDefault();ACT['save-worker']()}
+});
+
+/* ---------- start ---------- */
+async function boot(){
+  await loadSnap();S.pid=pickPubPid();render();
+  var flag=false;try{flag=sessionStorage.getItem('benchrota:admin')==='1'}catch(e){}
+  if(flag)enterAdmin();
+}
+boot();
+})();
+</script>
+
+</body></html>
