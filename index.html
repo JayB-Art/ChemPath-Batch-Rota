@@ -322,7 +322,7 @@ function pairReason(a,b,lv){
 }
 
 /* ---------- scheduler: greedy fill, many restarts, then swap/move local search toward equal hours ---------- */
-function searchSchedule(slots,workers,lockedMap,lv,restarts,shortIters,longIters){
+function searchSchedule(slots,workers,lockedMap,lv,restarts,shortIters,longIters,carry){
   var n=workers.length,m=slots.length,widx={};
   workers.forEach(function(w,k){widx[w.id]=k});
   if(!n)return {assign:new Array(m).fill(-1),unfilled:m};
@@ -333,6 +333,10 @@ function searchSchedule(slots,workers,lockedMap,lv,restarts,shortIters,longIters
     var id=lockedMap[s.key];if(id!==undefined&&widx[id]!==undefined){lockedIdx[i]=true;lockedW[i]=widx[id]}
   });
   var mH=totH/n,mW=totW/n;
+  /* hours worked in earlier saved periods (above or below average) shift this period's targets */
+  var cH=workers.map(function(w){var c=carry&&carry[w.id];return c?c.h:0}),cW=workers.map(function(w){var c=carry&&carry[w.id];return c?c.w:0});
+  var mcH=cH.reduce(function(a,b){return a+b},0)/n,mcW=cW.reduce(function(a,b){return a+b},0)/n;
+  cH=cH.map(function(x){return x-mcH});cW=cW.map(function(x){return x-mcW});
   var cap=workers.map(function(w){return w.maxHours>0?w.maxHours:Infinity});
   /* people with two or more shift-length options ticked should get a mix of those types */
   function clsOf(s){return s.short?0:(s.hours===12?(s.daytime?1:2):(s.hours===16?3:-1))}
@@ -348,7 +352,7 @@ function searchSchedule(slots,workers,lockedMap,lv,restarts,shortIters,longIters
   });
   function mixTerm(w,c){var sc=0;if(need4[w]&&c[0]<need4[w])sc+=400*(need4[w]-c[0]);if(!mixOn[w])return sc;var ts=mixTypes[w],tot=0,j;for(j=0;j<ts.length;j++)tot+=c[ts[j]];var mean=tot/ts.length;for(j=0;j<ts.length;j++){if(c[ts[j]]===0)sc+=220;sc+=1*(c[ts[j]]-mean)*(c[ts[j]]-mean)}return sc}
   function mixAdj(st,w,dec,inc){if(!mixOn[w]&&!need4[w])return 0;var c=st.C[w].slice();if(dec>=0)c[dec]--;if(inc>=0)c[inc]++;return mixTerm(w,c)}
-  function term(h,hw){var a=h-mH,b=hw-mW;return a*a+0.15*b*b}
+  function term(w,h,hw){var a=h+cH[w]-mH,b=hw+cW[w]-mW;return a*a+0.15*b*b}
   function makeState(){
     var st={assign:new Array(m).fill(-1),per:workers.map(function(){return []}),H:new Float64Array(n),HW:new Float64Array(n),C:workers.map(function(){return [0,0,0,0]})};
     st.place=function(i,w){st.assign[i]=w;st.per[w].push(i);st.H[w]+=slots[i].hours;if(slots[i].type!=='weekday')st.HW[w]+=slots[i].hours;if(cls[i]>=0)st.C[w][cls[i]]++};
@@ -373,14 +377,14 @@ function searchSchedule(slots,workers,lockedMap,lv,restarts,shortIters,longIters
     order.sort(function(a,b){return elig[a]-elig[b]||slots[b].hours-slots[a].hours||rnd[a]-rnd[b]});
     order.forEach(function(i){
       var bw=-1,bs=Infinity;
-      for(var w=0;w<n;w++){if(!ok[w][i]||!valid(st,w,i,-1))continue;var sc=st.H[w]+Math.random()*noise+(cls[i]>=0&&(mixOn[w]||need4[w])?0.3*(mixAdj(st,w,-1,cls[i])-mixAdj(st,w,-1,-1)):0);if(sc<bs){bs=sc;bw=w}}
+      for(var w=0;w<n;w++){if(!ok[w][i]||!valid(st,w,i,-1))continue;var sc=st.H[w]+cH[w]+Math.random()*noise+(cls[i]>=0&&(mixOn[w]||need4[w])?0.3*(mixAdj(st,w,-1,cls[i])-mixAdj(st,w,-1,-1)):0);if(sc<bs){bs=sc;bw=w}}
       if(bw>=0)st.place(i,bw);
     });
     return st;
   }
   function cost(st){
     var c=0,w,i;for(i=0;i<m;i++)if(st.assign[i]<0)c+=1e5;
-    for(w=0;w<n;w++)c+=term(st.H[w],st.HW[w])+mixTerm(w,st.C[w]);return c;
+    for(w=0;w<n;w++)c+=term(w,st.H[w],st.HW[w])+mixTerm(w,st.C[w]);return c;
   }
   var free=[];for(var q=0;q<m;q++)if(!lockedIdx[q])free.push(q);
   function improve(st,iters){
@@ -396,9 +400,9 @@ function searchSchedule(slots,workers,lockedMap,lv,restarts,shortIters,longIters
       var hi=slots[i].hours,wi=slots[i].type!=='weekday'?hi:0;
       var B=(Math.random()*n)|0;if(B===A)continue;
       if(Math.random()<0.6){for(t=0;t<2;t++){var c=(Math.random()*n)|0;if(c!==A&&st.H[c]<st.H[B])B=c}}
-      var base=term(st.H[A],st.HW[A])+term(st.H[B],st.HW[B])+mixTerm(A,st.C[A])+mixTerm(B,st.C[B]);
+      var base=term(A,st.H[A],st.HW[A])+term(B,st.H[B],st.HW[B])+mixTerm(A,st.C[A])+mixTerm(B,st.C[B]);
       if(ok[B][i]&&valid(st,B,i,-1)){
-        var d=term(st.H[A]-hi,st.HW[A]-wi)+term(st.H[B]+hi,st.HW[B]+wi)+mixAdj(st,A,cls[i],-1)+mixAdj(st,B,-1,cls[i])-base;
+        var d=term(A,st.H[A]-hi,st.HW[A]-wi)+term(B,st.H[B]+hi,st.HW[B]+wi)+mixAdj(st,A,cls[i],-1)+mixAdj(st,B,-1,cls[i])-base;
         if(d<-1e-9){st.unplace(i);st.place(i,B);continue}
       }
       var pb=st.per[B];if(!pb.length)continue;
@@ -406,7 +410,7 @@ function searchSchedule(slots,workers,lockedMap,lv,restarts,shortIters,longIters
       if(lockedIdx[j]||j===i||!ok[B][i]||!ok[A][j])continue;
       if(!valid(st,B,i,j)||!valid(st,A,j,i))continue;
       var hj=slots[j].hours,wj=slots[j].type!=='weekday'?hj:0;
-      var d2=term(st.H[A]-hi+hj,st.HW[A]-wi+wj)+term(st.H[B]+hi-hj,st.HW[B]+wi-wj)+mixAdj(st,A,cls[i],cls[j])+mixAdj(st,B,cls[j],cls[i])-base;
+      var d2=term(A,st.H[A]-hi+hj,st.HW[A]-wi+wj)+term(B,st.H[B]+hi-hj,st.HW[B]+wi-wj)+mixAdj(st,A,cls[i],cls[j])+mixAdj(st,B,cls[j],cls[i])-base;
       if(d2<-1e-9){st.unplace(i);st.unplace(j);st.place(i,B);st.place(j,A)}
     }
   }
@@ -419,13 +423,30 @@ function searchSchedule(slots,workers,lockedMap,lv,restarts,shortIters,longIters
   var unf=0;for(var z=0;z<m;z++)if(best.assign[z]<0)unf++;
   return {assign:best.assign,unfilled:unf};
 }
+function computeCarry(period){
+  var ids=Object.keys(S.periods).filter(function(id){return id<period.id}).sort().slice(-12),c={};
+  ids.forEach(function(id){
+    var p=S.periods[id];if(!p||!p.slots||!p.workers||!p.workers.length)return;
+    var hrs={},wk={},tot=0,totW=0,any=false;
+    buildSlots(p).forEach(function(s){
+      var e=p.slots[s.key];if(!e||!e.w)return;
+      any=true;tot+=s.hours;hrs[e.w]=(hrs[e.w]||0)+s.hours;
+      if(s.type!=='weekday'){totW+=s.hours;wk[e.w]=(wk[e.w]||0)+s.hours}
+    });
+    if(!any)return;
+    var mean=tot/p.workers.length,meanW=totW/p.workers.length;
+    p.workers.forEach(function(w){var o=c[w.id]||(c[w.id]={h:0,w:0});o.h+=(hrs[w.id]||0)-mean;o.w+=(wk[w.id]||0)-meanW});
+  });
+  Object.keys(c).forEach(function(id){c[id].h=Math.max(-60,Math.min(60,c[id].h));c[id].w=Math.max(-30,Math.min(30,c[id].w))});
+  return c;
+}
 function generateSchedule(period,opts){
   opts=opts||{};
   var slots=buildSlots(period),workers=period.workers,locked={},k;
   for(k in period.slots){var e=period.slots[k];if(e&&e.w&&(opts.lockAll||e.l))locked[k]=e.w}
-  var best=null,names=['strict','relaxed'];
+  var best=null,names=['strict','relaxed'],carry=computeCarry(period);
   for(var q=0;q<names.length;q++){
-    var r=searchSchedule(slots,workers,locked,LEVELS[names[q]],18,500,18000);
+    var r=searchSchedule(slots,workers,locked,LEVELS[names[q]],18,500,18000,carry);
     r.level=names[q];
     if(!best||r.unfilled<best.unfilled)best=r;
     if(r.unfilled===0)break;
@@ -488,12 +509,13 @@ function workerReasons(period,slots,worker,slot){
 'use strict';
 var S={ready:false,mode:'loading',roster:{workers:[],lastAvailable:[]},periods:{},pid:null,tab:'schedule',draft:null,
   modal:null,hl:'',undo:null,expanded:{},clearPins:false,
-  view:'public',pub:{},pubAt:null,ptab:'schedule',who:'',gate:'loading',gateErr:null,auth:null,unlocked:false,backendReady:false,me:null,admins:[],pending:null,gateInfo:null};
+  view:'public',pub:{},pubAt:null,ptab:'schedule',who:'',gate:'loading',gateErr:null,auth:null,unlocked:false,backendReady:false,remote:false,dataReady:false,me:null,admins:[],pending:null,gateInfo:null};
 /* ===== SETTINGS: fill these in before use (see README) ===== */
 var CONFIG={
   approverEmail:'jabarigbrown@gmail.com',                 // the one address that receives approval codes
   emailjs:{serviceId:'service_fyxxx79',templateId:'template_mdq8xci',publicKey:'d2YHy4__nn8MfbPCG'},
   github:{owner:'JayB-Art',repo:'ChemPath-Batch-Rota',branch:'main',path:'schedule.json'},
+  data:{owner:'JayB-Art',repo:'ChemPath-Batch-Rota-data',branch:'main',path:'rota-data.json'},   // PRIVATE repository where schedules are stored
   codeMinutes:15
 };
 var DB=null,DL=null,U=null,writeChain=Promise.resolve();
@@ -523,13 +545,73 @@ var ICON={
 /* ---------- storage: this browser (localStorage) ---------- */
 function lsGet(path){try{var v=localStorage.getItem('benchrota:'+path);return v?JSON.parse(v):null}catch(e){return null}}
 function lsSet(path,data){localStorage.setItem('benchrota:'+path,JSON.stringify(data))}
+/* ---------- storage: private GitHub data repository ---------- */
+var REM={sha:null,data:null};
+function ghHeaders(){return {'Authorization':'Bearer '+ghToken(),'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'}}
+function dataUrl(){var d=CONFIG.data;return 'https://api.github.com/repos/'+d.owner+'/'+d.repo+'/contents/'+d.path}
+function b64d(x){return decodeURIComponent(escape(atob(String(x).replace(/\s/g,''))))}
+function isRemotePath(path){return path==='settings/roster'||path.indexOf('periods/')===0}
+function ghMsg(e){
+  var st=e&&e.status;
+  if(st===401)return 'GitHub rejected the token. Check it under GitHub connection.';
+  if(st===403)return 'The token is not allowed to use the data repository. It needs Contents read and write on it.';
+  if(st===404)return 'The data repository was not found. Create the private repository "'+CONFIG.data.repo+'" (tick Add a README) and make sure the token covers it.';
+  if(st===409||st===422)return 'The data changed while saving. Try again.';
+  return 'Could not reach GitHub. Check your connection and try again.';
+}
+async function remoteFetch(){
+  var r=await fetch(dataUrl()+'?ref='+encodeURIComponent(CONFIG.data.branch),{headers:ghHeaders(),cache:'no-store'});
+  if(r.status===404)return {exists:false};
+  if(!r.ok)throw {status:r.status};
+  var j=await r.json();
+  if(!j.content)throw {status:0,big:true};
+  return {exists:true,sha:j.sha,data:JSON.parse(b64d(j.content))};
+}
+async function remoteWrite(mutate){
+  for(var attempt=0;attempt<3;attempt++){
+    var cur=(attempt===0&&REM.sha&&REM.data)?{exists:true,sha:REM.sha,data:REM.data}:await remoteFetch();
+    var d=cur.exists?cur.data:{roster:null,periods:{}};
+    d.periods=d.periods||{};
+    mutate(d);
+    var body={message:'Update rota data ('+(meName()||'admin')+')',content:b64(JSON.stringify(d)),branch:CONFIG.data.branch};
+    if(cur.exists)body.sha=cur.sha;
+    var w=await fetch(dataUrl(),{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},ghHeaders()),body:JSON.stringify(body)});
+    if(w.ok){var j=await w.json();REM.sha=j.content.sha;REM.data=d;return}
+    REM.sha=null;REM.data=null;
+    if(w.status===409||w.status===422)continue;
+    throw {status:w.status};
+  }
+  throw {status:409};
+}
+function applyRemote(d){
+  S.roster={workers:(d.roster&&d.roster.workers)||[],lastAvailable:(d.roster&&d.roster.lastAvailable)||[]};
+  S.periods={};Object.keys(d.periods||{}).forEach(function(id){var p=d.periods[id];if(p&&p.id)S.periods[p.id]=p});
+}
+async function bootData(){
+  if(S.dataReady){S.gate='open';afterUnlock();render();window.scrollTo(0,0);return}
+  if(!ghToken()){S.gate='ghsetup';S.gateErr=null;S.gateInfo='Add a GitHub token so schedules can be loaded from, and saved to, your private data repository.';render();return}
+  S.gate='loading';S.gateErr=null;S.gateInfo=null;render();
+  try{
+    var cur=await remoteFetch();
+    if(cur.exists){REM.sha=cur.sha;REM.data=cur.data;applyRemote(cur.data)}
+    else{
+      /* first time: move anything already saved in this browser into the data repository */
+      REM.sha=null;REM.data=null;
+      var seedR=clone(S.roster),seedP=clone(S.periods);
+      await remoteWrite(function(d){d.roster=seedR;d.periods=seedP});
+    }
+    S.remote=true;S.dataReady=true;S.ready=true;S.gate='open';
+    afterUnlock();render();window.scrollTo(0,0);
+  }catch(e){S.gate='dataerror';S.gateErr=ghMsg(e);render()}
+}
 function persist(path,data){
   var snap=clone(data);
   writeChain=writeChain.then(function(){
+    if(S.remote&&isRemotePath(path))return remoteWrite(function(d){if(path==='settings/roster')d.roster=snap;else d.periods[path.slice(8)]=snap});
     return DB?DB.doc(path).set(snap):lsSet(path,snap);
   }).catch(function(err){
     try{console.error(err)}catch(e){}
-    toast(err&&err.code==='invalid_argument'?'You have view-only access, so this change was not saved.':'Could not save. Your change is on screen but may be lost if you close the page.');
+    toast(S.remote?'Not saved to GitHub: '+ghMsg(err):(err&&err.code==='invalid_argument'?'You have view-only access, so this change was not saved.':'Could not save. Your change is on screen but may be lost if you close the page.'));
   });
   return writeChain;
 }
@@ -543,7 +625,7 @@ async function loadAll(){
     q.docs.forEach(function(d){if(d.exists)list.push(clone(d.data()))});
   }else{
     r=lsGet('settings/roster');
-    try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.indexOf('benchrota:periods/')===0){var v=lsGet(k.slice(9));if(v)list.push(v)}}}catch(e){}
+    try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.indexOf('benchrota:periods/')===0){var v=lsGet(k.slice(10));if(v)list.push(v)}}}catch(e){}
   }
   if(r&&r.workers)S.roster={workers:r.workers,lastAvailable:r.lastAvailable||[]};
   list.forEach(function(p){if(p&&p.id)S.periods[p.id]=p});
@@ -563,7 +645,7 @@ function closeModal(){S.modal=null;renderModal()}
 /* ---------- views ---------- */
 function headerHTML(){
   var p=cur(),status=!S.ready?'':(p?'<span class="status built">Schedule built</span>':'<span class="status todo">Needs setup</span>');
-  var store=S.mode==='db'?'Saved with this page':(S.mode==='local'?'Saved in this browser only':'Loading…');
+  var store=S.remote?'Saved to GitHub (private data repository)':S.mode==='db'?'Saved with this page':(S.mode==='local'?'Saved in this browser only':'Loading…');
   var tabs=[['schedule','Schedule'],['table','Table'],['hours','Hours'],['setup','Setup'],['team','Team']];
   return '<header>'+
     '<div class="brandline"><span><b>Bench Rota</b> · admin</span><span class="store">'+store+(S.me?' · Signed in as '+esc(meName()):'')+'</span><span class="row" style="gap:.4rem;letter-spacing:0;text-transform:none"><button type="button" class="btn small primary" data-act="publish">Publish schedule</button><button type="button" class="btn small" data-act="download-json">Download file</button><button type="button" class="btn small" data-act="backup">Backup</button><button type="button" class="btn small" data-act="restore">Restore</button><input type="file" id="restore-file" data-bind="restore-file" accept=".json,application/json" hidden><button type="button" class="btn small" data-act="change-pw-open">Password</button><button type="button" class="btn small" data-act="gh-open">Publishing setup</button><button type="button" class="btn small" data-act="lock">Sign out</button></span></div>'+
@@ -630,7 +712,7 @@ function hoursHTML(){
   var tot=rows.map(function(r){return r.total}),n=rows.length||1;
   var sum=tot.reduce(function(a,b){return a+b},0),avg=sum/n,mx=Math.max.apply(null,tot.concat([0])),mn=tot.length?Math.min.apply(null,tot):0;
   var h='<div class="readouts"><div class="ro"><div class="k">Average</div><div class="v">'+fh(avg)+'h</div></div><div class="ro"><div class="k">Lowest</div><div class="v">'+fh(mn)+'h</div></div><div class="ro"><div class="k">Highest</div><div class="v">'+fh(mx)+'h</div></div><div class="ro"><div class="k">Gap, high to low</div><div class="v">'+fh(mx-mn)+'h</div></div></div>';
-  h+='<div class="toolbar"><span class="note">Hours count in full on the day a shift starts. The line marks the average.'+(S.view==='public'?'':' Restricted people are marked *.')+'</span>'+(DL&&S.view==='admin'?'<button type="button" class="btn small" data-act="export-hours">Export CSV</button>':'')+'</div>';
+  h+='<div class="toolbar"><span class="note">Hours count in full on the day a shift starts. The line marks the average.'+(S.view==='public'?'':' New schedules also use earlier saved periods to even out hours over time. Restricted people are marked *.')+'</span>'+(DL&&S.view==='admin'?'<button type="button" class="btn small" data-act="export-hours">Export CSV</button>':'')+'</div>';
   h+='<div class="hours">';
   rows.slice().sort(function(a,b){return b.total-a.total}).forEach(function(r){
     var w=r.w,restricted=chipsFor(w).length>0,dev=r.total-avg;
@@ -779,6 +861,7 @@ function initDraft(){
   S.draft=d;
 }
 function goPeriod(pid){
+  try{lsSet('settings/ui',{pid:pid})}catch(e){}
   S.pid=pid;S.hl='';S.draft=null;S.expanded={};
   S.tab=S.periods[pid]?'schedule':'setup';
   if(S.tab==='setup')initDraft();
@@ -955,7 +1038,8 @@ function gateHTML(){
   if(g==='request')return '<section class="step gate"><h2>Request admin access</h2><p class="note">A one-time code is emailed to the approver. If they approve you, they will pass the code on to you.</p>'+f('nm','Your name','text','name')+f('em','Your email','text','email')+err+'<button type="button" class="btn primary" data-act="send-code">Send code to approver</button>'+(pendingOk()?lk('have-code','I already have a code'):'')+lk('back-login','Back to sign in')+'</section>';
   if(g==='verify')return '<section class="step gate"><h2>Enter your approval code</h2>'+(info||'<p class="note">Ask the approver for the code. It expires after '+CONFIG.codeMinutes+' minutes.</p>')+f('vc','Approval code','text','off')+f('pw1','Choose a password (8+ characters)','password','new-password')+f('pw2','Repeat password','password','new-password')+err+'<button type="button" class="btn primary" data-act="verify-code">Create my profile</button>'+lk('back-login','Back to sign in')+'</section>';
   if(g==='change')return '<section class="step gate"><h2>Change password</h2>'+f('pw0','Current password','password','current-password')+f('pw1','New password (8+ characters)','password','new-password')+f('pw2','Repeat new password','password','new-password')+err+'<div class="row"><button type="button" class="btn primary" data-act="save-pw">Save</button><button type="button" class="btn" data-act="cancel-pw">Cancel</button></div></section>';
-  if(g==='ghsetup')return '<section class="step gate"><h2>Publishing setup</h2><p class="note">Publishing writes <b>'+esc(CONFIG.github.path)+'</b> to the <b>'+esc(CONFIG.github.owner+'/'+CONFIG.github.repo)+'</b> repository. Paste a GitHub fine-grained token limited to that one repository with Contents set to read and write. It is kept in this browser only.</p>'+(ghToken()?'<p class="note">A token is already saved in this browser.</p>':'')+f('tk','GitHub token','password','off')+err+'<div class="row"><button type="button" class="btn primary" data-act="save-token">Save token</button>'+(ghToken()?'<button type="button" class="btn danger" data-act="remove-token">Remove token</button>':'')+'<button type="button" class="btn" data-act="cancel-pw">Cancel</button></div></section>';
+  if(g==='ghsetup')return '<section class="step gate"><h2>GitHub connection</h2>'+info+'<p class="note">Schedules are saved to the private repository <b>'+esc(CONFIG.data.owner+'/'+CONFIG.data.repo)+'</b> and published to <b>'+esc(CONFIG.github.owner+'/'+CONFIG.github.repo)+'</b>. Paste a GitHub fine-grained token that covers both repositories with Contents set to read and write. It is kept in this browser only.</p>'+(ghToken()?'<p class="note">A token is already saved in this browser.</p>':'')+f('tk','GitHub token','password','off')+err+'<div class="row"><button type="button" class="btn primary" data-act="save-token">Save token</button>'+(ghToken()?'<button type="button" class="btn danger" data-act="remove-token">Remove token</button>':'')+'<button type="button" class="btn" data-act="cancel-pw">Cancel</button></div></section>';
+  if(g==='dataerror')return '<section class="step gate"><h2>Could not load schedules</h2><p class="note">'+esc(S.gateErr||'')+'</p><div class="row"><button type="button" class="btn primary" data-act="retry-load">Try again</button><button type="button" class="btn" data-act="gh-open">GitHub connection</button><button type="button" class="btn" data-act="lock">Sign out</button></div></section>';
   return '<section class="step gate"><h2>Admin sign in</h2>'+(S.admins.length?'':'<p class="note">No admin profiles exist yet. Request access to create the first one.</p>')+f('em','Email','text','username')+f('pw1','Password','password','current-password')+err+'<button type="button" class="btn primary" data-act="login">Sign in</button>'+lk('request-open','Request admin access')+back+'</section>';
 }
 function renderGate(){
@@ -989,8 +1073,13 @@ async function publishToGitHub(){
     toast(st===401?'GitHub rejected the token. Check it under Publishing setup.':st===403?'The token is not allowed to write to this repository.':st===404?'Repository or file not found. Check the token covers this repository.':(st===409||st===422)?'The file changed on GitHub. Try publishing again.':'Could not reach GitHub. Check your connection.');
   }
 }
+function pickAdminPid(){
+  var ui=lsGet('settings/ui');if(ui&&ui.pid&&S.periods[ui.pid])return ui.pid;
+  var ids=Object.keys(S.periods).filter(function(id){var p=S.periods[id];return p&&p.slots&&Object.keys(p.slots).length}).sort();
+  return ids.length?ids[ids.length-1]:periodIdFor(addDays(todayStr(),10));
+}
 function afterUnlock(){
-  S.pid=periodIdFor(addDays(todayStr(),10));S.hl='';S.draft=null;S.expanded={};
+  S.pid=pickAdminPid();S.hl='';S.draft=null;S.expanded={};
   S.tab=S.periods[S.pid]?'schedule':'setup';
   if(S.tab==='setup')initDraft();
 }
@@ -1007,10 +1096,11 @@ function saveBlob(name,text,type){
 }
 async function initBackend(){
   DB=null;U=null;
+  try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
   DL={save:function(o){saveBlob(o.filename,o.data,'text/csv');return Promise.resolve()}};
   S.mode='local';
   try{await loadAll()}catch(err){try{console.error(err)}catch(e){}}
-  S.ready=true;S.backendReady=true;
+  S.backendReady=true;
 }
 async function enterAdmin(){
   S.view='admin';S.gate='loading';S.gateErr=null;S.gateInfo=null;render();
@@ -1021,10 +1111,10 @@ async function enterAdmin(){
   if(me&&S.admins.some(function(x){return x.id===me})){S.me=me;unlock();return}
   S.gate='login';render();
 }
-function unlock(){
-  S.unlocked=true;S.gate='open';S.gateErr=null;S.gateInfo=null;
+async function unlock(){
+  S.unlocked=true;S.gateErr=null;S.gateInfo=null;
   try{sessionStorage.setItem('benchrota:me',S.me)}catch(e){}
-  afterUnlock();render();window.scrollTo(0,0);
+  await bootData();
 }
 function buildSnapshot(){
   var snap={at:new Date().toISOString(),periods:{}};
@@ -1061,7 +1151,7 @@ var ACT={
   ppnext:function(){S.pid=shiftPeriodId(S.pid,1);S.hl='';render();window.scrollTo(0,0)},
   'go-admin':function(){enterAdmin()},
   'to-public':function(){leaveAdmin()},
-  lock:function(){S.unlocked=false;S.me=null;try{sessionStorage.removeItem('benchrota:me')}catch(e){}leaveAdmin()},
+  lock:function(){S.unlocked=false;S.me=null;S.dataReady=false;S.remote=false;try{sessionStorage.removeItem('benchrota:me')}catch(e){}leaveAdmin()},
   login:async function(){
     var em=pwv('em').trim().toLowerCase(),pw=pwv('pw1');
     var a=S.admins.filter(function(x){return x.email===em})[0];
@@ -1116,12 +1206,15 @@ var ACT={
     var t=pwv('tk').trim();if(!S.me)return;
     if(!t){S.gateErr='Paste the token first.';render();return}
     try{localStorage.setItem('benchrota:ghtoken',t)}catch(e){S.gateErr='This browser would not save the token.';render();return}
-    S.gate='open';S.gateErr=null;render();toast('Token saved in this browser. Click Publish schedule.');
+    S.gateErr=null;
+    if(!S.dataReady){bootData();return}
+    S.gate='open';render();toast('Token saved in this browser.');
   },
-  'remove-token':function(){try{localStorage.removeItem('benchrota:ghtoken')}catch(e){}S.gate='open';render();toast('Token removed.')},
+  'remove-token':function(){try{localStorage.removeItem('benchrota:ghtoken')}catch(e){}S.gate=S.dataReady?'open':'ghsetup';S.gateErr=null;render();toast('Token removed.')},
+  'retry-load':function(){if(S.me)bootData()},
   'download-json':function(){publishPublic()},
   'change-pw-open':function(){S.gate='change';S.gateErr=null;render()},
-  'cancel-pw':function(){S.gate='open';S.gateErr=null;render()},
+  'cancel-pw':function(){S.gate=S.dataReady?'open':'dataerror';S.gateErr=S.dataReady?null:'Schedules are not loaded yet. Add a token and try again.';render()},
   publish:function(){if(S.me)publishToGitHub()},
   backup:function(){backupAll()},
   restore:function(){var f=document.getElementById('restore-file');if(f)f.click()},
@@ -1199,7 +1292,7 @@ var ACT={
 document.addEventListener('click',function(e){
   if(e.target.classList&&e.target.classList.contains('backdrop')){closeModal();return}
   var el=e.target.closest('[data-act]');if(!el)return;
-  var a=el.dataset.act,okp={ptab:1,ppprev:1,ppnext:1,'go-admin':1},okg={login:1,'to-public':1,'request-open':1,'back-login':1,'have-code':1,'send-code':1,'verify-code':1,'save-pw':1,'cancel-pw':1,'save-token':1,'remove-token':1};
+  var a=el.dataset.act,okp={ptab:1,ppprev:1,ppnext:1,'go-admin':1},okg={'retry-load':1,'gh-open':1,lock:1,login:1,'to-public':1,'request-open':1,'back-login':1,'have-code':1,'send-code':1,'verify-code':1,'save-pw':1,'cancel-pw':1,'save-token':1,'remove-token':1};
   if(S.view==='public'&&!okp[a])return;
   if(S.view==='admin'&&S.gate!=='open'&&!okg[a])return;
   var f=ACT[a];if(f)f(el,e);
