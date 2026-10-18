@@ -558,6 +558,7 @@ function scheduleHTML(){
     '<div class="grp">'+(S.undo&&S.undo.pid===p.id?'<button type="button" class="btn small" data-act="undo">Undo</button>':'')+
     (val.unfilled.length?'<button type="button" class="btn small" data-act="fill">Fill empty shifts</button>':'')+
     '<button type="button" class="btn small" data-act="rebuild">Rebuild unpinned shifts</button>'+
+    '<button type="button" class="btn small danger" data-act="clear-sched">Clear schedule</button>'+
     (DL?'<button type="button" class="btn small" data-act="export-sched">Export CSV</button>':'')+'</div></div>';
   if(val.unfilled.length||val.issueCount){
     var items=[];
@@ -787,6 +788,13 @@ function rerun(lockAll){
   p.slots=res.slots;p.unfilled=res.unfilled;p.relaxed=res.relaxed;
   savePeriod(p);render();
   toast(res.unfilled?res.unfilled+' shift'+(res.unfilled===1?'':'s')+' still unfilled.':(lockAll?'Empty shifts filled.':'Unpinned shifts rebuilt.'),'Undo',doUndo);
+}
+function clearSchedule(){
+  var p=cur();if(!p)return;
+  S.undo={pid:p.id,slots:clone(p.slots),workers:clone(p.workers),holidays:clone(p.holidays)};
+  p.slots={};p.relaxed=false;p.unfilled=buildSlots(p).length;
+  savePeriod(p);render();
+  toast('Schedule cleared for '+periodLabel(p.id)+'.','Undo',doUndo);
 }
 function doUndo(){
   var u=S.undo,p=cur();if(!u||!p||u.pid!==p.id)return;
@@ -1056,6 +1064,7 @@ var ACT={
   },
   build:buildPeriod,
   rebuild:function(){rerun(false)},
+  'clear-sched':function(){clearSchedule()},
   fill:function(){rerun(true)},
   undo:function(){doUndo()},
   'export-sched':function(){exportCSV('sched')},
