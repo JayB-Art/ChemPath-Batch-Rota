@@ -465,7 +465,14 @@ function workerReasons(period,slots,worker,slot){
 'use strict';
 var S={ready:false,mode:'loading',roster:{workers:[],lastAvailable:[]},periods:{},pid:null,tab:'schedule',draft:null,
   modal:null,hl:'',undo:null,expanded:{},clearPins:false,
-  view:'public',pub:{},pubAt:null,ptab:'schedule',who:'',gate:'loading',gateErr:null,auth:null,unlocked:false,backendReady:false};
+  view:'public',pub:{},pubAt:null,ptab:'schedule',who:'',gate:'loading',gateErr:null,auth:null,unlocked:false,backendReady:false,me:null,admins:[],pending:null,gateInfo:null};
+/* ===== SETTINGS: fill these in before use (see README) ===== */
+var CONFIG={
+  approverEmail:'jabarigbrown@gmail.com',                 // the one address that receives approval codes
+  emailjs:{serviceId:service_d35uw4n'',templateId:template_mdq8xci'',publicKey:d2YHy4__nn8MfbPCG''},
+  github:{owner:'JayB-Art',repo:'ChemPath-Batch-Rota',branch:'main',path:'schedule.json'},
+  codeMinutes:15
+};
 var DB=null,DL=null,U=null,writeChain=Promise.resolve();
 
 /* ---------- helpers ---------- */
@@ -537,7 +544,7 @@ function headerHTML(){
   var store=S.mode==='db'?'Saved with this page':(S.mode==='local'?'Saved in this browser only':'Loading…');
   var tabs=[['schedule','Schedule'],['hours','Hours'],['setup','Setup'],['team','Team']];
   return '<header>'+
-    '<div class="brandline"><span><b>Bench Rota</b> · admin</span><span class="store">'+store+'</span><span class="row" style="gap:.4rem;letter-spacing:0;text-transform:none"><button type="button" class="btn small primary" data-act="publish">Download schedule.json</button><button type="button" class="btn small" data-act="backup">Backup</button><button type="button" class="btn small" data-act="restore">Restore</button><input type="file" id="restore-file" data-bind="restore-file" accept=".json,application/json" hidden><button type="button" class="btn small" data-act="change-pw-open">Password</button><button type="button" class="btn small" data-act="lock">Lock</button></span></div>'+
+    '<div class="brandline"><span><b>Bench Rota</b> · admin</span><span class="store">'+store+(S.me?' · Signed in as '+esc(meName()):'')+'</span><span class="row" style="gap:.4rem;letter-spacing:0;text-transform:none"><button type="button" class="btn small primary" data-act="publish">Publish schedule</button><button type="button" class="btn small" data-act="download-json">Download file</button><button type="button" class="btn small" data-act="backup">Backup</button><button type="button" class="btn small" data-act="restore">Restore</button><input type="file" id="restore-file" data-bind="restore-file" accept=".json,application/json" hidden><button type="button" class="btn small" data-act="change-pw-open">Password</button><button type="button" class="btn small" data-act="gh-open">Publishing setup</button><button type="button" class="btn small" data-act="lock">Sign out</button></span></div>'+
     '<div class="pnav"><button type="button" class="iconbtn" data-act="pprev" aria-label="Previous period">'+ICON.prev+'</button>'+
     '<div class="plabel"><h1>'+esc(periodLabel(S.pid))+'</h1><div class="pmeta"><span>26th to 25th</span>'+status+'</div></div>'+
     '<button type="button" class="iconbtn" data-act="pnext" aria-label="Next period">'+ICON.next+'</button></div>'+
@@ -884,39 +891,63 @@ function renderPublic(){
   window.scrollTo(0,y);
 }
 
-/* ---------- admin password gate ---------- */
-async function sha(s){var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return Array.from(new Uint8Array(b)).map(function(x){return x.toString(16).padStart(2,'0')}).join('')}
+/* ---------- admin profiles, approval codes, sign in ---------- */
+async function sha(x){var b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(x));return Array.from(new Uint8Array(b)).map(function(v){return v.toString(16).padStart(2,'0')}).join('')}
 function pwv(id){var el=document.getElementById(id);return el?el.value:''}
+function emailOk(e){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)}
+function newCode(){var a='ABCDEFGHJKMNPQRSTUVWXYZ23456789',b=new Uint8Array(8);crypto.getRandomValues(b);return Array.from(b).map(function(x){return a[x%a.length]}).join('')}
+function meName(){var a=(S.admins||[]).filter(function(x){return x.id===S.me})[0];return a?a.name:''}
+function mailReady(){var c=CONFIG.emailjs;return !!(CONFIG.approverEmail&&c.serviceId&&c.templateId&&c.publicKey)}
+function pendingOk(){return !!(S.pending&&S.pending.exp>Date.now())}
+function loadAdmins(){var d=lsGet('settings/admins');S.admins=(d&&d.admins)||[];S.pending=lsGet('settings/pending')}
+function saveAdmins(){return persist('settings/admins',{admins:S.admins})}
 function gateHTML(){
-  var g=S.gate,err=S.gateErr?'<div class="err">'+esc(S.gateErr)+'</div>':'';
-  var back='<button type="button" class="link" data-act="to-public" style="align-self:flex-start">Back to public view</button>';
-  function pw(id,l,ac){return '<div class="field"><label for="'+id+'">'+l+'</label><input type="password" id="'+id+'" autocomplete="'+ac+'"></div>'}
+  var g=S.gate,err=S.gateErr?'<div class="err">'+esc(S.gateErr)+'</div>':'',info=S.gateInfo?'<p class="note">'+esc(S.gateInfo)+'</p>':'';
+  function lk(a,t){return '<button type="button" class="link" data-act="'+a+'" style="align-self:flex-start">'+t+'</button>'}
+  function f(id,l,type,ac){return '<div class="field"><label for="'+id+'">'+l+'</label><input type="'+type+'" id="'+id+'" autocomplete="'+ac+'"></div>'}
+  var back=lk('to-public','Back to public view');
   if(g==='loading')return '<div class="empty-state"><h2>Loading…</h2></div>';
-  if(g==='noadmin')return '<section class="step gate"><h2>Admin not available</h2><p class="note">The admin password has not been created yet. The page owner needs to open this page while signed in to claude.ai and create it.</p>'+back+'</section>';
-  if(g==='setup')return '<section class="step gate"><h2>Create the admin password</h2><p class="note">Use at least 6 characters. It is stored only in this browser, so it keeps casual visitors out of the admin screen but is not strong security.</p>'+pw('pw1','New password','new-password')+pw('pw2','Repeat password','new-password')+err+'<button type="button" class="btn primary" data-act="setup-pw">Create password</button>'+back+'</section>';
-  if(g==='change')return '<section class="step gate"><h2>Change password</h2>'+pw('pw0','Current password','current-password')+pw('pw1','New password','new-password')+pw('pw2','Repeat new password','new-password')+err+'<div class="row"><button type="button" class="btn primary" data-act="save-pw">Save</button><button type="button" class="btn" data-act="cancel-pw">Cancel</button></div></section>';
-  return '<section class="step gate"><h2>Admin sign in</h2><p class="note">Enter the password to edit the rota.</p>'+pw('pw1','Password','current-password')+err+'<button type="button" class="btn primary" data-act="login">Sign in</button>'+back+'</section>';
+  if(g==='request')return '<section class="step gate"><h2>Request admin access</h2><p class="note">A one-time code is emailed to the approver. If they approve you, they will pass the code on to you.</p>'+f('nm','Your name','text','name')+f('em','Your email','text','email')+err+'<button type="button" class="btn primary" data-act="send-code">Send code to approver</button>'+(pendingOk()?lk('have-code','I already have a code'):'')+lk('back-login','Back to sign in')+'</section>';
+  if(g==='verify')return '<section class="step gate"><h2>Enter your approval code</h2>'+(info||'<p class="note">Ask the approver for the code. It expires after '+CONFIG.codeMinutes+' minutes.</p>')+f('vc','Approval code','text','off')+f('pw1','Choose a password (8+ characters)','password','new-password')+f('pw2','Repeat password','password','new-password')+err+'<button type="button" class="btn primary" data-act="verify-code">Create my profile</button>'+lk('back-login','Back to sign in')+'</section>';
+  if(g==='change')return '<section class="step gate"><h2>Change password</h2>'+f('pw0','Current password','password','current-password')+f('pw1','New password (8+ characters)','password','new-password')+f('pw2','Repeat new password','password','new-password')+err+'<div class="row"><button type="button" class="btn primary" data-act="save-pw">Save</button><button type="button" class="btn" data-act="cancel-pw">Cancel</button></div></section>';
+  if(g==='ghsetup')return '<section class="step gate"><h2>Publishing setup</h2><p class="note">Publishing writes <b>'+esc(CONFIG.github.path)+'</b> to the <b>'+esc(CONFIG.github.owner+'/'+CONFIG.github.repo)+'</b> repository. Paste a GitHub fine-grained token limited to that one repository with Contents set to read and write. It is kept in this browser only.</p>'+(ghToken()?'<p class="note">A token is already saved in this browser.</p>':'')+f('tk','GitHub token','password','off')+err+'<div class="row"><button type="button" class="btn primary" data-act="save-token">Save token</button>'+(ghToken()?'<button type="button" class="btn danger" data-act="remove-token">Remove token</button>':'')+'<button type="button" class="btn" data-act="cancel-pw">Cancel</button></div></section>';
+  return '<section class="step gate"><h2>Admin sign in</h2>'+(S.admins.length?'':'<p class="note">No admin profiles exist yet. Request access to create the first one.</p>')+f('em','Email','text','username')+f('pw1','Password','password','current-password')+err+'<button type="button" class="btn primary" data-act="login">Sign in</button>'+lk('request-open','Request admin access')+back+'</section>';
 }
 function renderGate(){
   document.getElementById('modal-root').innerHTML='';
   document.getElementById('app').innerHTML='<header><div class="brandline"><span><b>Bench Rota</b> · admin</span></div></header><main>'+gateHTML()+'</main>';
-  var f=document.querySelector('#app input');if(f)f.focus({preventScroll:true});
+  var el=document.querySelector('#app input');if(el)el.focus({preventScroll:true});
 }
-function saveAuth(){return persist('settings/auth',S.auth)}
-async function loadAuth(){
-  var a=null;
-  try{if(DB){var d=await DB.doc('settings/auth').get();a=d.exists?clone(d.data()):null}else a=lsGet('settings/auth')}catch(e){a=null}
-  S.auth=a&&a.hash?a:null;
+async function sendApprovalEmail(name,email,code){
+  var c=CONFIG.emailjs;
+  var r=await fetch('https://api.emailjs.com/api/v1.0/email/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({service_id:c.serviceId,template_id:c.templateId,user_id:c.publicKey,template_params:{to_email:CONFIG.approverEmail,requester_name:name,requester_email:email,code:code,expires_minutes:CONFIG.codeMinutes}})});
+  if(!r.ok)throw new Error('mail');
+}
+function ghToken(){try{return localStorage.getItem('benchrota:ghtoken')||''}catch(e){return ''}}
+function b64(x){return btoa(unescape(encodeURIComponent(x)))}
+async function publishToGitHub(){
+  var tok=ghToken();
+  if(!tok){S.gate='ghsetup';S.gateErr=null;render();return}
+  var g=CONFIG.github,url='https://api.github.com/repos/'+g.owner+'/'+g.repo+'/contents/'+g.path;
+  var H={'Authorization':'Bearer '+tok,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'};
+  toast('Publishing…');
+  try{
+    var fileSha=null,r=await fetch(url+'?ref='+encodeURIComponent(g.branch),{headers:H,cache:'no-store'});
+    if(r.ok){fileSha=(await r.json()).sha}else if(r.status!==404){throw {status:r.status}}
+    var body={message:'Publish schedule ('+(meName()||'admin')+')',content:b64(JSON.stringify(buildSnapshot(),null,1)),branch:g.branch};
+    if(fileSha)body.sha=fileSha;
+    var w=await fetch(url,{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},H),body:JSON.stringify(body)});
+    if(!w.ok)throw {status:w.status};
+    toast('Published. The public page usually updates within a few minutes.');
+  }catch(e){
+    var st=e&&e.status;
+    toast(st===401?'GitHub rejected the token. Check it under Publishing setup.':st===403?'The token is not allowed to write to this repository.':st===404?'Repository or file not found. Check the token covers this repository.':(st===409||st===422)?'The file changed on GitHub. Try publishing again.':'Could not reach GitHub. Check your connection.');
+  }
 }
 function afterUnlock(){
   S.pid=periodIdFor(addDays(todayStr(),10));S.hl='';S.draft=null;S.expanded={};
   S.tab=S.periods[S.pid]?'schedule':'setup';
   if(S.tab==='setup')initDraft();
-}
-function unlock(){
-  S.unlocked=true;S.gate='open';S.gateErr=null;
-  try{sessionStorage.setItem('benchrota:unlocked','1')}catch(e){}
-  afterUnlock();render();window.scrollTo(0,0);
 }
 function leaveAdmin(){
   S.view='public';S.modal=null;S.hl='';S.pid=pickPubPid();
@@ -937,14 +968,18 @@ async function initBackend(){
   S.ready=true;S.backendReady=true;
 }
 async function enterAdmin(){
-  S.view='admin';S.gate='loading';S.gateErr=null;render();
+  S.view='admin';S.gate='loading';S.gateErr=null;S.gateInfo=null;render();
   try{sessionStorage.setItem('benchrota:admin','1')}catch(e){}
   if(!S.backendReady)await initBackend();
-  await loadAuth();
-  var was=false;try{was=sessionStorage.getItem('benchrota:unlocked')==='1'}catch(e){}
-  if(S.auth&&was){unlock();return}
-  S.gate=S.auth?'login':'setup';
-  render();
+  loadAdmins();
+  var me=null;try{me=sessionStorage.getItem('benchrota:me')}catch(e){}
+  if(me&&S.admins.some(function(x){return x.id===me})){S.me=me;unlock();return}
+  S.gate='login';render();
+}
+function unlock(){
+  S.unlocked=true;S.gate='open';S.gateErr=null;S.gateInfo=null;
+  try{sessionStorage.setItem('benchrota:me',S.me)}catch(e){}
+  afterUnlock();render();window.scrollTo(0,0);
 }
 function buildSnapshot(){
   var snap={at:new Date().toISOString(),periods:{}};
@@ -981,28 +1016,68 @@ var ACT={
   ppnext:function(){S.pid=shiftPeriodId(S.pid,1);S.hl='';render();window.scrollTo(0,0)},
   'go-admin':function(){enterAdmin()},
   'to-public':function(){leaveAdmin()},
-  lock:function(){S.unlocked=false;try{sessionStorage.removeItem('benchrota:unlocked')}catch(e){}leaveAdmin()},
+  lock:function(){S.unlocked=false;S.me=null;try{sessionStorage.removeItem('benchrota:me')}catch(e){}leaveAdmin()},
   login:async function(){
-    var v=pwv('pw1');if(!S.auth)return;
-    if(await sha((S.auth.salt||'')+v)!==S.auth.hash){S.gateErr='Incorrect password.';render();return}
-    unlock();
+    var em=pwv('em').trim().toLowerCase(),pw=pwv('pw1');
+    var a=S.admins.filter(function(x){return x.email===em})[0];
+    var ok=a&&(await sha(a.salt+pw))===a.hash;
+    if(!ok){await new Promise(function(r){setTimeout(r,700)});S.gateErr='Incorrect email or password.';render();return}
+    S.me=a.id;unlock();
   },
-  'setup-pw':async function(){
-    var a=pwv('pw1'),b=pwv('pw2');
-    if(a.length<6){S.gateErr='Use at least 6 characters.';render();return}
+  'request-open':function(){S.gate='request';S.gateErr=null;S.gateInfo=null;render()},
+  'back-login':function(){S.gate='login';S.gateErr=null;S.gateInfo=null;render()},
+  'have-code':function(){S.gate='verify';S.gateErr=null;S.gateInfo=null;render()},
+  'send-code':async function(){
+    var nm=pwv('nm').trim(),em=pwv('em').trim().toLowerCase();
+    if(!nm){S.gateErr='Enter your name.';render();return}
+    if(!emailOk(em)){S.gateErr='Enter a valid email address.';render();return}
+    if(S.admins.some(function(x){return x.email===em})){S.gateErr='That email already has a profile. Sign in instead.';render();return}
+    if(!mailReady()){S.gateErr='Email sending is not set up yet. Fill in the settings at the top of the page script (see README).';render();return}
+    var code=newCode(),salt=uid();
+    S.gateErr=null;toast('Sending code…');
+    try{
+      await sendApprovalEmail(nm,em,code);
+      S.pending={name:nm,email:em,salt:salt,hash:await sha(salt+code),exp:Date.now()+CONFIG.codeMinutes*60000,tries:0};
+      await persist('settings/pending',S.pending);
+      S.gate='verify';S.gateInfo='A code was emailed to the approver. Ask them for it. It expires in '+CONFIG.codeMinutes+' minutes.';render();
+    }catch(e){S.gateErr='The email could not be sent. Check the email settings and try again.';render()}
+  },
+  'verify-code':async function(){
+    var code=pwv('vc').trim().toUpperCase().replace(/\s+/g,''),a=pwv('pw1'),b=pwv('pw2'),pd=S.pending;
+    if(!pendingOk()){S.pending=null;persist('settings/pending',null);S.gateErr='That code has expired. Request a new one.';render();return}
+    if(a.length<8){S.gateErr='Use at least 8 characters for the password.';render();return}
     if(a!==b){S.gateErr='The two passwords do not match.';render();return}
-    var salt=uid();S.auth={salt:salt,hash:await sha(salt+a)};await saveAuth();unlock();
+    if((await sha(pd.salt+code))!==pd.hash){
+      pd.tries=(pd.tries||0)+1;
+      if(pd.tries>=5){S.pending=null;persist('settings/pending',null);S.gateErr='Too many wrong codes. Request a new one.'}
+      else{persist('settings/pending',pd);S.gateErr='Incorrect code.'}
+      render();return}
+    var salt=uid(),prof={id:uid(),name:pd.name,email:pd.email,salt:salt,hash:await sha(salt+a),at:new Date().toISOString()};
+    S.admins.push(prof);await saveAdmins();
+    S.pending=null;persist('settings/pending',null);
+    S.me=prof.id;unlock();toast('Welcome, '+prof.name+'. Your admin profile is ready.');
   },
+  'save-pw':async function(){
+    var o=pwv('pw0'),a=pwv('pw1'),b=pwv('pw2'),m=S.admins.filter(function(x){return x.id===S.me})[0];
+    if(!m)return;
+    if((await sha(m.salt+o))!==m.hash){S.gateErr='Current password is incorrect.';render();return}
+    if(a.length<8){S.gateErr='Use at least 8 characters.';render();return}
+    if(a!==b){S.gateErr='The two new passwords do not match.';render();return}
+    m.salt=uid();m.hash=await sha(m.salt+a);await saveAdmins();
+    S.gate='open';S.gateErr=null;render();toast('Password changed.');
+  },
+  'gh-open':function(){if(!S.me)return;S.gate='ghsetup';S.gateErr=null;render()},
+  'save-token':function(){
+    var t=pwv('tk').trim();if(!S.me)return;
+    if(!t){S.gateErr='Paste the token first.';render();return}
+    try{localStorage.setItem('benchrota:ghtoken',t)}catch(e){S.gateErr='This browser would not save the token.';render();return}
+    S.gate='open';S.gateErr=null;render();toast('Token saved in this browser. Click Publish schedule.');
+  },
+  'remove-token':function(){try{localStorage.removeItem('benchrota:ghtoken')}catch(e){}S.gate='open';render();toast('Token removed.')},
+  'download-json':function(){publishPublic()},
   'change-pw-open':function(){S.gate='change';S.gateErr=null;render()},
   'cancel-pw':function(){S.gate='open';S.gateErr=null;render()},
-  'save-pw':async function(){
-    var o=pwv('pw0'),a=pwv('pw1'),b=pwv('pw2');
-    if(await sha((S.auth.salt||'')+o)!==S.auth.hash){S.gateErr='Current password is incorrect.';render();return}
-    if(a.length<6){S.gateErr='Use at least 6 characters.';render();return}
-    if(a!==b){S.gateErr='The two new passwords do not match.';render();return}
-    var salt=uid();S.auth={salt:salt,hash:await sha(salt+a)};await saveAuth();S.gate='open';S.gateErr=null;render();toast('Password changed.');
-  },
-  publish:function(){publishPublic()},
+  publish:function(){if(S.me)publishToGitHub()},
   backup:function(){backupAll()},
   restore:function(){var f=document.getElementById('restore-file');if(f)f.click()},
   tab:function(el){setTab(el.dataset.tab)},
@@ -1079,7 +1154,7 @@ var ACT={
 document.addEventListener('click',function(e){
   if(e.target.classList&&e.target.classList.contains('backdrop')){closeModal();return}
   var el=e.target.closest('[data-act]');if(!el)return;
-  var a=el.dataset.act,okp={ptab:1,ppprev:1,ppnext:1,'go-admin':1},okg={login:1,'setup-pw':1,'to-public':1,'save-pw':1,'cancel-pw':1};
+  var a=el.dataset.act,okp={ptab:1,ppprev:1,ppnext:1,'go-admin':1},okg={login:1,'to-public':1,'request-open':1,'back-login':1,'have-code':1,'send-code':1,'verify-code':1,'save-pw':1,'cancel-pw':1,'save-token':1,'remove-token':1};
   if(S.view==='public'&&!okp[a])return;
   if(S.view==='admin'&&S.gate!=='open'&&!okg[a])return;
   var f=ACT[a];if(f)f(el,e);
@@ -1107,7 +1182,7 @@ document.addEventListener('input',function(e){
 });
 document.addEventListener('keydown',function(e){
   if(e.key==='Escape'&&S.modal)closeModal();
-  if(e.key==='Enter'&&S.view==='admin'&&S.gate!=='open'&&e.target.id&&/^pw[0-2]$/.test(e.target.id)){e.preventDefault();var b=document.querySelector('.gate .btn.primary');if(b)b.click()}
+  if(e.key==='Enter'&&S.view==='admin'&&S.gate!=='open'&&e.target.id&&/^(pw[0-2]|em|nm|vc|tk)$/.test(e.target.id)){e.preventDefault();var b=document.querySelector('.gate .btn.primary');if(b)b.click()}
   if(e.key==='Enter'&&S.modal&&S.modal.type==='worker'&&e.target.id==='wname'){e.preventDefault();ACT['save-worker']()}
 });
 
