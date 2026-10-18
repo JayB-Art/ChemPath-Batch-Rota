@@ -299,6 +299,7 @@ function staticReasons(w,s){
   if((w.daysOff||[]).indexOf(s.date)>=0)r.push('Marked unavailable that day');
   if(w.days&&w.days.length&&w.days.indexOf(dow(s.date))<0)r.push('Only works '+w.days.slice().sort(function(a,b){return ((a+6)%7)-((b+6)%7)}).map(function(d){return DOW[d]}).join(', '));
   if(w.daytimeOnly&&!s.daytime)r.push('Daytime only (8:30am to 8:30pm)');
+  if(w.no4&&s.short)r.push('Opted out of 4-hour shifts');
   var sh4=!!w.onlyShort,d12=!!(w.only12day||w.only12),n12=!!(w.only12night||w.only12),l16=!!w.only16;
   if(sh4||d12||n12||l16){
     var okLong=(sh4&&s.short)||(d12&&s.hours===12&&s.daytime)||(n12&&s.hours===12&&!s.daytime)||(l16&&s.hours===16);
@@ -337,7 +338,8 @@ function searchSchedule(slots,workers,lockedMap,lv,restarts,shortIters,longIters
     mixTypes[k]=av;mixOn[k]=av.length>=2;
     /* 4-hour plus a 12-hour option: at least three 4-hour shifts to top up their hours */
     var n4=0;for(var q=0;q<m;q++)if(cls[q]===0&&ok[k][q])n4++;
-    need4[k]=(w.onlyShort&&(w.only12day||w.only12night||w.only12))?Math.min(3,n4):0;
+    var longSel=!!(w.only12day||w.only12night||w.only12||w.only16),can4=!!w.onlyShort||(!w.no4&&!longSel);
+    need4[k]=!can4?0:Math.min((w.onlyShort&&(w.only12day||w.only12night||w.only12))?3:2,n4);
   });
   function mixTerm(w,c){var sc=0;if(need4[w]&&c[0]<need4[w])sc+=400*(need4[w]-c[0]);if(!mixOn[w])return sc;var ts=mixTypes[w],tot=0,j;for(j=0;j<ts.length;j++)tot+=c[ts[j]];var mean=tot/ts.length;for(j=0;j<ts.length;j++){if(c[ts[j]]===0)sc+=220;sc+=1*(c[ts[j]]-mean)*(c[ts[j]]-mean)}return sc}
   function mixAdj(st,w,dec,inc){if(!mixOn[w]&&!need4[w])return 0;var c=st.C[w].slice();if(dec>=0)c[dec]--;if(inc>=0)c[inc]++;return mixTerm(w,c)}
@@ -502,7 +504,7 @@ function hue(p,wid){var k=p?p.workers.findIndex(function(w){return w.id===wid}):
 function hueR(wid){var k=S.roster.workers.findIndex(function(w){return w.id===wid});if(k<0)k=0;return Math.round((k*137.5)%360)}
 function chipsFor(w){
   var c=[];
-  var cp=[];if(w.onlyShort)cp.push('4h');if(w.only12day||w.only12)cp.push('12h day');if(w.only12night||w.only12)cp.push('12h night');if(w.only16)cp.push('16h');if(cp.length)c.push(cp.join(' or ')+' shifts only');
+  if(w.no4)c.push('No 4h shifts');var cp=[];if(w.onlyShort)cp.push('4h');if(w.only12day||w.only12)cp.push('12h day');if(w.only12night||w.only12)cp.push('12h night');if(w.only16)cp.push('16h');if(cp.length)c.push(cp.join(' or ')+' shifts only');
   if(w.days&&w.days.length&&w.days.length<7)c.push(w.days.slice().sort(function(a,b){return ((a+6)%7)-((b+6)%7)}).map(function(d){return DOW[d]}).join(' '));
   if(w.daytimeOnly)c.push('8:30am–8:30pm only');
   if(w.maxHours>0)c.push('Max '+w.maxHours+'h');
@@ -652,9 +654,9 @@ function setupHTML(){
   var p=cur(),avail=S.roster.workers.filter(function(w){return d.avail.indexOf(w.id)>=0});
   var h='<section class="step"><h2><span class="stepn">Step 1</span>Who is available this period?</h2><p class="note">Tick everyone who can work from '+esc(fmtShort(periodStart(S.pid)))+' to '+esc(fmtShort(periodEnd(S.pid)))+'. Your saved team is listed here, so you only add a person once.</p>';
   if(!S.roster.workers.length){
-    h+='<div class="empty-state"><h2>Your team is empty</h2><p>Add each scientist once, with any restrictions. They stay saved for every future period.</p><div class="row" style="justify-content:center"><button type="button" class="btn primary" data-act="new-worker">Add a scientist</button><button type="button" class="btn" data-act="load-example">Load an example team of 9</button></div></div>';
+    h+='<div class="empty-state"><h2>Your team is empty</h2><p>Add each lab technologist once, with any restrictions. They stay saved for every future period.</p><div class="row" style="justify-content:center"><button type="button" class="btn primary" data-act="new-worker">Add a lab technologist</button><button type="button" class="btn" data-act="load-example">Load an example team of 9</button></div></div>';
   }else{
-    h+='<div class="row" style="margin-bottom:.4rem"><button type="button" class="btn small" data-act="sel-all">Select all</button><button type="button" class="btn small" data-act="sel-last">Same as last period</button><button type="button" class="btn small" data-act="sel-none">Clear</button><span class="grow"></span><button type="button" class="btn small" data-act="new-worker">Add a scientist</button></div>';
+    h+='<div class="row" style="margin-bottom:.4rem"><button type="button" class="btn small" data-act="sel-all">Select all</button><button type="button" class="btn small" data-act="sel-last">Same as last period</button><button type="button" class="btn small" data-act="sel-none">Clear</button><span class="grow"></span><button type="button" class="btn small" data-act="new-worker">Add a lab technologist</button></div>';
     h+='<div class="wlist">'+S.roster.workers.map(function(w){return workerRowSetup(w,d)}).join('')+'</div>';
   }
   h+='</section>';
@@ -685,8 +687,8 @@ function setupHTML(){
   return h+'</div></section>';
 }
 function teamHTML(){
-  var h='<div class="toolbar"><span class="note">Everyone saved here is offered at the start of each period. Restrictions apply whenever the person is available.</span><button type="button" class="btn primary" data-act="new-worker">Add a scientist</button></div>';
-  if(!S.roster.workers.length)return h+'<div class="empty-state"><h2>No one saved yet</h2><p>Add each scientist once. Mark anyone who can only work 4-hour shifts, only certain weekdays, or only between 8:30am and 8:30pm.</p><button type="button" class="btn" data-act="load-example">Load an example team of 9</button></div>';
+  var h='<div class="toolbar"><span class="note">Everyone saved here is offered at the start of each period. Restrictions apply whenever the person is available.</span><button type="button" class="btn primary" data-act="new-worker">Add a lab technologist</button></div>';
+  if(!S.roster.workers.length)return h+'<div class="empty-state"><h2>No one saved yet</h2><p>Add each lab technologist once. Mark anyone who can only work 4-hour shifts, only certain weekdays, or only between 8:30am and 8:30pm.</p><button type="button" class="btn" data-act="load-example">Load an example team of 9</button></div>';
   h+='<section class="step"><div class="wlist">'+S.roster.workers.map(function(w){
     return '<div class="wrow"><div class="wmain"><i class="dot" style="--wh:'+hueR(w.id)+'"></i><b>'+esc(w.name)+'</b>'+(chipsFor(w).length?chipsFor(w).map(function(c){return '<span class="chip accent">'+esc(c)+'</span>'}).join(''):'<span class="muted" style="font-size:.85rem">No restrictions</span>')+'</div><div class="wacts"><button type="button" class="link" data-act="edit-worker" data-id="'+esc(w.id)+'">Edit</button></div></div>'}).join('')+'</div></section>';
   return h;
@@ -734,13 +736,14 @@ function shiftModalHTML(){
 }
 function workerModalHTML(){
   var m=S.modal,d=m.draft,order=[1,2,3,4,5,6,0];
-  var h='<div><h2>'+(m.id?'Edit scientist':'Add a scientist')+'</h2></div>';
+  var h='<div><h2>'+(m.id?'Edit lab technologist':'Add a lab technologist')+'</h2></div>';
   h+='<div class="field"><label for="wname">Name</label><input type="text" id="wname" data-bind="wname" value="'+esc(d.name)+'" autocomplete="off" data-autofocus></div>';
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-short"'+(d.onlyShort?' checked':'')+'>Only 4-hour shifts</label>';
+  h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-no4"'+(d.no4?' checked':'')+'>Opt out of 4-hour shifts</label>';
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-12d"'+(d.only12day?' checked':'')+'>Only 12-hour day shifts (8:30 AM to 8:30 PM, weekends and holidays)</label>';
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-12n"'+(d.only12night?' checked':'')+'>Only 12-hour night shifts (8:30 PM to 8:30 AM, weekends and holidays)</label>';
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-16"'+(d.only16?' checked':'')+'>Only 16-hour shifts (weekday overnight)</label>';
-  h+='<span class="note">Tick more than one to allow a mix. With 4-hour and a 12-hour option both ticked, the person gets at least three 4-hour shifts.</span>';
+  h+='<span class="note">Tick more than one to allow a mix. With 4-hour and a 12-hour option both ticked, the person gets at least three 4-hour shifts. Everyone else who can work 4-hour shifts gets at least two, unless they opt out here or are limited to 12-hour or 16-hour shifts only.</span>';
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-day"'+(d.daytimeOnly?' checked':'')+'>Only between 8:30am and 8:30pm</label>';
   h+='<div class="field" style="max-width:14rem"><label for="wmax">Maximum hours per period</label><input type="text" inputmode="numeric" id="wmax" data-bind="wmax" value="'+esc(d.maxHours)+'" placeholder="No limit" autocomplete="off"></div>';
   h+='<div><div class="lbl" style="margin-bottom:.35rem" id="dp-l">Can work on</div><div class="daypick" role="group" aria-labelledby="dp-l">'+order.map(function(x){return '<button type="button" data-act="wk-day" data-d="'+x+'" aria-pressed="'+(d.days.indexOf(x)>=0)+'">'+DOW[x]+'</button>'}).join('')+'</div></div>';
@@ -783,7 +786,7 @@ function setTab(t){
 function buildPeriod(){
   var d=S.draft,old=cur(),pid=S.pid;
   var workers=S.roster.workers.filter(function(w){return d.avail.indexOf(w.id)>=0}).map(function(w){
-    return {id:w.id,name:w.name,onlyShort:!!w.onlyShort,only12day:!!(w.only12day||w.only12),only12night:!!(w.only12night||w.only12),only16:!!w.only16,days:w.days&&w.days.length&&w.days.length<7?w.days.slice():null,daytimeOnly:!!w.daytimeOnly,maxHours:w.maxHours>0?w.maxHours:null,daysOff:(d.daysOff[w.id]||[]).slice().sort()};
+    return {id:w.id,name:w.name,no4:!!w.no4,onlyShort:!!w.onlyShort,only12day:!!(w.only12day||w.only12),only12night:!!(w.only12night||w.only12),only16:!!w.only16,days:w.days&&w.days.length&&w.days.length<7?w.days.slice():null,daytimeOnly:!!w.daytimeOnly,maxHours:w.maxHours>0?w.maxHours:null,daysOff:(d.daysOff[w.id]||[]).slice().sort()};
   });
   if(!workers.length){toast('Tick at least one available person first.');return}
   var p={id:pid,start:periodStart(pid),end:periodEnd(pid),workers:workers,
@@ -834,14 +837,14 @@ async function exportCSV(kind){
   var p=cur();if(!p||!DL)return;
   var slots=buildSlots(p),lines,name;
   if(kind==='sched'){
-    lines=[['Date','Day','Shift type','Shift','Start','End','Hours','Scientist']];
+    lines=[['Date','Day','Shift type','Shift','Start','End','Hours','Lab Technologist']];
     slots.slice().sort(function(a,b){return a.startMin-b.startMin}).forEach(function(s){
       var e=p.slots[s.key],w=e&&e.w?p.workers.filter(function(x){return x.id===e.w})[0]:null;
       lines.push([s.date,DOW[dow(s.date)],s.type,s.label,s.startClock,s.endClock,s.hours,w?w.name:'UNASSIGNED']);
     });
     name='schedule-'+p.id+'.csv';
   }else{
-    lines=[['Scientist','Total hours','Shifts','Weekday hours','Weekend and holiday hours','Overnight hours']];
+    lines=[['Lab Technologist','Total hours','Shifts','Weekday hours','Weekend and holiday hours','Overnight hours']];
     tally(p,slots).forEach(function(r){lines.push([r.w.name,r.total,r.count,r.weekday,r.special,r.night])});
     name='hours-'+p.id+'.csv';
   }
@@ -862,7 +865,7 @@ function pickPubPid(){
   var earlier=ids.filter(function(i){return i<=want});return earlier.length?earlier[earlier.length-1]:ids[0];
 }
 function publicHeaderHTML(){
-  var tabs=[['schedule','Schedule'],['hours','Hours'],['mine','By scientist']];
+  var tabs=[['schedule','Schedule'],['hours','Hours'],['mine','By lab technologist']];
   return '<header><div class="brandline"><span><b>Bench Rota</b> · clinical laboratory shifts</span><span class="store">'+(S.pubAt?'Updated '+esc(fmtShort(S.pubAt.slice(0,10))):'')+'</span></div>'+
     '<div class="pnav"><button type="button" class="iconbtn" data-act="ppprev" aria-label="Previous period">'+ICON.prev+'</button>'+
     '<div class="plabel"><h1>'+esc(periodLabel(S.pid))+'</h1><div class="pmeta"><span>26th to 25th</span></div></div>'+
@@ -889,10 +892,10 @@ function publicScheduleHTML(){
 function publicMineHTML(){
   var p=cur();if(!p)return emptyPeriodHTML();
   var slots=buildSlots(p),names=p.workers.slice().sort(function(a,b){return a.name.localeCompare(b.name)});
-  var h='<div class="toolbar"><div class="field"><label for="who">Choose a scientist</label><select id="who" data-bind="who"><option value="">Select a name…</option>'+
+  var h='<div class="toolbar"><div class="field"><label for="who">Choose a lab technologist</label><select id="who" data-bind="who"><option value="">Select a name…</option>'+
     names.map(function(w){return '<option value="'+esc(w.id)+'"'+(S.who===w.id?' selected':'')+'>'+esc(w.name)+'</option>'}).join('')+'</select></div></div>';
   var w=p.workers.filter(function(x){return x.id===S.who})[0];
-  if(!w)return h+'<p class="note">Pick a name to see that scientist’s own schedule for this period. Other scientists’ shifts are not shown here.</p>';
+  if(!w)return h+'<p class="note">Pick a name to see that lab technologist’s own schedule for this period. Other lab technologists’ shifts are not shown here.</p>';
   var mine=slots.filter(function(s){var e=p.slots[s.key];return e&&e.w===w.id}).sort(function(a,b){return a.startMin-b.startMin});
   var r=tally(p,slots).filter(function(x){return x.w.id===w.id})[0];
   h+='<div class="readouts">'+[['Total hours',fh(r.total)+'h'],['Shifts',r.count],['Weekday',fh(r.weekday)+'h'],['Weekend / holiday',fh(r.special)+'h'],['Overnight',fh(r.night)+'h']].map(function(k){return '<div class="ro"><div class="k">'+k[0]+'</div><div class="v">'+k[1]+'</div></div>'}).join('')+'</div>';
@@ -1103,10 +1106,10 @@ var ACT={
   'close-modal':closeModal,
   assign:function(el){assign(el.dataset.id)},
   unassign:function(){var p=cur();delete p.slots[S.modal.key];savePeriod(p);closeModal();render()},
-  'new-worker':function(){S.modal={type:'worker',id:null,draft:{name:'',onlyShort:false,only12day:false,only12night:false,only16:false,daytimeOnly:false,maxHours:'',days:[0,1,2,3,4,5,6]}};renderModal()},
+  'new-worker':function(){S.modal={type:'worker',id:null,draft:{name:'',no4:false,onlyShort:false,only12day:false,only12night:false,only16:false,daytimeOnly:false,maxHours:'',days:[0,1,2,3,4,5,6]}};renderModal()},
   'edit-worker':function(el){
     var w=S.roster.workers.filter(function(x){return x.id===el.dataset.id})[0];if(!w)return;
-    S.modal={type:'worker',id:w.id,draft:{name:w.name,onlyShort:!!w.onlyShort,only12day:!!(w.only12day||w.only12),only12night:!!(w.only12night||w.only12),only16:!!w.only16,daytimeOnly:!!w.daytimeOnly,maxHours:w.maxHours>0?String(w.maxHours):'',days:w.days&&w.days.length?w.days.slice():[0,1,2,3,4,5,6]}};renderModal();
+    S.modal={type:'worker',id:w.id,draft:{name:w.name,no4:!!w.no4,onlyShort:!!w.onlyShort,only12day:!!(w.only12day||w.only12),only12night:!!(w.only12night||w.only12),only16:!!w.only16,daytimeOnly:!!w.daytimeOnly,maxHours:w.maxHours>0?String(w.maxHours):'',days:w.days&&w.days.length?w.days.slice():[0,1,2,3,4,5,6]}};renderModal();
   },
   'wk-day':function(el){
     var d=S.modal.draft,x=Number(el.dataset.d),i=d.days.indexOf(x);
@@ -1121,7 +1124,7 @@ var ACT={
     if(d.only16&&!d.only12day&&!d.only12night&&!d.onlyShort&&!d.days.some(function(x){return x>=1&&x<=5})){m.err='16-hour shifts only happen Monday to Friday, so choose at least one weekday.';renderModal();return}
     var mx=String(d.maxHours||'').trim();
     if(mx&&!/^\d{1,3}$/.test(mx)||mx&&Number(mx)<1){m.err='Enter a whole number of hours, or leave it blank for no limit.';renderModal();return}
-    var rec={id:m.id||uid(),name:name,onlyShort:!!d.onlyShort,only12day:!!d.only12day,only12night:!!d.only12night,only16:!!d.only16,daytimeOnly:!!d.daytimeOnly,maxHours:mx?Number(mx):null,days:d.days.length===7?null:d.days.slice()};
+    var rec={id:m.id||uid(),name:name,no4:!!d.no4,onlyShort:!!d.onlyShort,only12day:!!d.only12day,only12night:!!d.only12night,only16:!!d.only16,daytimeOnly:!!d.daytimeOnly,maxHours:mx?Number(mx):null,days:d.days.length===7?null:d.days.slice()};
     if(m.id){S.roster.workers=S.roster.workers.map(function(w){return w.id===m.id?rec:w})}
     else{S.roster.workers.push(rec);if(S.draft)S.draft.avail.push(rec.id)}
     saveRoster();S.modal=null;render();
@@ -1162,7 +1165,7 @@ var ACT={
   'export-hours':function(){exportCSV('hours')},
   'load-example':function(){
     var names=['Example 1','Example 2','Example 3','Example 4','Example 5','Example 6','Example 7','Example 8','Example 9'];
-    S.roster.workers=names.map(function(n,i){return {id:uid(),name:'Example scientist '+(i+1),onlyShort:i===6,daytimeOnly:i===7,days:i===7?[5,6]:null}});
+    S.roster.workers=names.map(function(n,i){return {id:uid(),name:'Example lab technologist '+(i+1),onlyShort:i===6,daytimeOnly:i===7,days:i===7?[5,6]:null}});
     saveRoster();if(S.draft)S.draft.avail=S.roster.workers.map(function(w){return w.id});
     render();toast('Example team added. Rename or remove them under Team.');
   }
@@ -1187,7 +1190,8 @@ document.addEventListener('change',function(e){
   else if(b==='who'){S.who=el.value;render()}
   else if(b==='restore-file'){if(el.files&&el.files[0])restoreFrom(el.files[0]);el.value=''}
   else if(b==='pin-toggle'){S.modal.pin=el.checked}
-  else if(b==='w-short'){var dd=S.modal.draft;dd.onlyShort=el.checked;S.modal.err=null;renderModal()}
+  else if(b==='w-short'){var dd=S.modal.draft;dd.onlyShort=el.checked;if(el.checked)dd.no4=false;S.modal.err=null;renderModal()}
+  else if(b==='w-no4'){var d3=S.modal.draft;d3.no4=el.checked;if(el.checked)d3.onlyShort=false;S.modal.err=null;renderModal()}
   else if(b==='w-12d'||b==='w-12n'||b==='w-16'){var d2=S.modal.draft;d2[b==='w-12d'?'only12day':(b==='w-12n'?'only12night':'only16')]=el.checked;S.modal.err=null;renderModal()}
   else if(b==='w-day'){S.modal.draft.daytimeOnly=el.checked}
 });
