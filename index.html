@@ -299,11 +299,10 @@ function staticReasons(w,s){
   if((w.daysOff||[]).indexOf(s.date)>=0)r.push('Marked unavailable that day');
   if(w.days&&w.days.length&&w.days.indexOf(dow(s.date))<0)r.push('Only works '+w.days.slice().sort(function(a,b){return ((a+6)%7)-((b+6)%7)}).map(function(d){return DOW[d]}).join(', '));
   if(w.daytimeOnly&&!s.daytime)r.push('Daytime only (8:30am to 8:30pm)');
-  if(w.onlyShort&&!s.short)r.push('4-hour shifts only');
-  var d12=!!(w.only12day||w.only12),n12=!!(w.only12night||w.only12),l16=!!w.only16;
-  if(d12||n12||l16){
-    var okLong=(d12&&s.hours===12&&s.daytime)||(n12&&s.hours===12&&!s.daytime)||(l16&&s.hours===16);
-    if(!okLong){var parts=[];if(d12)parts.push('12-hour day');if(n12)parts.push('12-hour night');if(l16)parts.push('16-hour');r.push('Only works '+parts.join(' or ')+' shifts')}
+  var sh4=!!w.onlyShort,d12=!!(w.only12day||w.only12),n12=!!(w.only12night||w.only12),l16=!!w.only16;
+  if(sh4||d12||n12||l16){
+    var okLong=(sh4&&s.short)||(d12&&s.hours===12&&s.daytime)||(n12&&s.hours===12&&!s.daytime)||(l16&&s.hours===16);
+    if(!okLong){var parts=[];if(sh4)parts.push('4-hour');if(d12)parts.push('12-hour day');if(n12)parts.push('12-hour night');if(l16)parts.push('16-hour');r.push('Only works '+parts.join(' or ')+' shifts')}
   }
   return r;
 }
@@ -490,8 +489,7 @@ function hue(p,wid){var k=p?p.workers.findIndex(function(w){return w.id===wid}):
 function hueR(wid){var k=S.roster.workers.findIndex(function(w){return w.id===wid});if(k<0)k=0;return Math.round((k*137.5)%360)}
 function chipsFor(w){
   var c=[];
-  if(w.onlyShort)c.push('4h shifts only');
-  var cp=[];if(w.only12day||w.only12)cp.push('12h day');if(w.only12night||w.only12)cp.push('12h night');if(w.only16)cp.push('16h');if(cp.length)c.push(cp.join(' or ')+' shifts only');
+  var cp=[];if(w.onlyShort)cp.push('4h');if(w.only12day||w.only12)cp.push('12h day');if(w.only12night||w.only12)cp.push('12h night');if(w.only16)cp.push('16h');if(cp.length)c.push(cp.join(' or ')+' shifts only');
   if(w.days&&w.days.length&&w.days.length<7)c.push(w.days.slice().sort(function(a,b){return ((a+6)%7)-((b+6)%7)}).map(function(d){return DOW[d]}).join(' '));
   if(w.daytimeOnly)c.push('8:30am–8:30pm only');
   if(w.maxHours>0)c.push('Max '+w.maxHours+'h');
@@ -729,7 +727,7 @@ function workerModalHTML(){
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-12d"'+(d.only12day?' checked':'')+'>Only 12-hour day shifts (8:30 AM to 8:30 PM, weekends and holidays)</label>';
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-12n"'+(d.only12night?' checked':'')+'>Only 12-hour night shifts (8:30 PM to 8:30 AM, weekends and holidays)</label>';
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-16"'+(d.only16?' checked':'')+'>Only 16-hour shifts (weekday overnight)</label>';
-  h+='<span class="note">Tick more than one to allow several long-shift types. These cannot be combined with 4-hour only.</span>';
+  h+='<span class="note">Tick more than one to allow a mix, for example 4-hour and 12-hour night shifts.</span>';
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-day"'+(d.daytimeOnly?' checked':'')+'>Only between 8:30am and 8:30pm</label>';
   h+='<div class="field" style="max-width:14rem"><label for="wmax">Maximum hours per period</label><input type="text" inputmode="numeric" id="wmax" data-bind="wmax" value="'+esc(d.maxHours)+'" placeholder="No limit" autocomplete="off"></div>';
   h+='<div><div class="lbl" style="margin-bottom:.35rem" id="dp-l">Can work on</div><div class="daypick" role="group" aria-labelledby="dp-l">'+order.map(function(x){return '<button type="button" data-act="wk-day" data-d="'+x+'" aria-pressed="'+(d.days.indexOf(x)>=0)+'">'+DOW[x]+'</button>'}).join('')+'</div></div>';
@@ -1106,8 +1104,8 @@ var ACT={
     var m=S.modal,d=m.draft,name=d.name.trim();
     if(!name){m.err='Enter a name.';renderModal();return}
     if(!d.days.length){m.err='Choose at least one day this person can work.';renderModal();return}
-    if(d.daytimeOnly&&(d.only12night||d.only16)&&!d.only12day){m.err='12-hour night and 16-hour shifts run overnight, so they cannot be combined with daytime only.';renderModal();return}
-    if(d.only16&&!d.only12day&&!d.only12night&&!d.days.some(function(x){return x>=1&&x<=5})){m.err='16-hour shifts only happen Monday to Friday, so choose at least one weekday.';renderModal();return}
+    if(d.daytimeOnly&&(d.only12night||d.only16)&&!d.only12day&&!d.onlyShort){m.err='12-hour night and 16-hour shifts run overnight, so they cannot be combined with daytime only unless 4-hour or 12-hour day shifts are also ticked.';renderModal();return}
+    if(d.only16&&!d.only12day&&!d.only12night&&!d.onlyShort&&!d.days.some(function(x){return x>=1&&x<=5})){m.err='16-hour shifts only happen Monday to Friday, so choose at least one weekday.';renderModal();return}
     var mx=String(d.maxHours||'').trim();
     if(mx&&!/^\d{1,3}$/.test(mx)||mx&&Number(mx)<1){m.err='Enter a whole number of hours, or leave it blank for no limit.';renderModal();return}
     var rec={id:m.id||uid(),name:name,onlyShort:!!d.onlyShort,only12day:!!d.only12day,only12night:!!d.only12night,only16:!!d.only16,daytimeOnly:!!d.daytimeOnly,maxHours:mx?Number(mx):null,days:d.days.length===7?null:d.days.slice()};
@@ -1176,8 +1174,8 @@ document.addEventListener('change',function(e){
   else if(b==='who'){S.who=el.value;render()}
   else if(b==='restore-file'){if(el.files&&el.files[0])restoreFrom(el.files[0]);el.value=''}
   else if(b==='pin-toggle'){S.modal.pin=el.checked}
-  else if(b==='w-short'){var dd=S.modal.draft;dd.onlyShort=el.checked;if(el.checked){dd.only12day=false;dd.only12night=false;dd.only16=false}S.modal.err=null;renderModal()}
-  else if(b==='w-12d'||b==='w-12n'||b==='w-16'){var d2=S.modal.draft;d2[b==='w-12d'?'only12day':(b==='w-12n'?'only12night':'only16')]=el.checked;if(el.checked)d2.onlyShort=false;S.modal.err=null;renderModal()}
+  else if(b==='w-short'){var dd=S.modal.draft;dd.onlyShort=el.checked;S.modal.err=null;renderModal()}
+  else if(b==='w-12d'||b==='w-12n'||b==='w-16'){var d2=S.modal.draft;d2[b==='w-12d'?'only12day':(b==='w-12n'?'only12night':'only16')]=el.checked;S.modal.err=null;renderModal()}
   else if(b==='w-day'){S.modal.draft.daytimeOnly=el.checked}
 });
 document.addEventListener('input',function(e){
