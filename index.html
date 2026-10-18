@@ -205,6 +205,11 @@ input[type=checkbox]{width:1.15rem;height:1.15rem;accent-color:var(--accent);fle
 .toast button{background:none;border:0;color:inherit;font-weight:700;text-decoration:underline;cursor:pointer}
 @media (prefers-reduced-motion:no-preference){.tab,.btn,.shift,.cand{transition:border-color .12s,background-color .12s,color .12s}}
 
+.ptable{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.ptable th,.ptable td{padding:.55rem .8rem;text-align:left;border-top:1px solid var(--line-2);white-space:nowrap}
+.ptable thead th{border-top:0;font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2);background:var(--bg)}
+.ptable tr.alt td{background:color-mix(in srgb,var(--ink) 4%,transparent)}
+.tblwrap{overflow-x:auto;max-width:100%}
 .pubview .day .shift{cursor:default}.pubview .day .shift:hover{background:none;border-color:transparent}
 .pubfoot{margin-top:2.5rem;padding-top:1rem;border-top:1px solid var(--line);text-align:center}
 .gate{max-width:26rem;margin:2rem auto 0;display:flex;flex-direction:column;gap:.8rem}
@@ -559,7 +564,7 @@ function closeModal(){S.modal=null;renderModal()}
 function headerHTML(){
   var p=cur(),status=!S.ready?'':(p?'<span class="status built">Schedule built</span>':'<span class="status todo">Needs setup</span>');
   var store=S.mode==='db'?'Saved with this page':(S.mode==='local'?'Saved in this browser only':'Loading…');
-  var tabs=[['schedule','Schedule'],['hours','Hours'],['setup','Setup'],['team','Team']];
+  var tabs=[['schedule','Schedule'],['table','Table'],['hours','Hours'],['setup','Setup'],['team','Team']];
   return '<header>'+
     '<div class="brandline"><span><b>Bench Rota</b> · admin</span><span class="store">'+store+(S.me?' · Signed in as '+esc(meName()):'')+'</span><span class="row" style="gap:.4rem;letter-spacing:0;text-transform:none"><button type="button" class="btn small primary" data-act="publish">Publish schedule</button><button type="button" class="btn small" data-act="download-json">Download file</button><button type="button" class="btn small" data-act="backup">Backup</button><button type="button" class="btn small" data-act="restore">Restore</button><input type="file" id="restore-file" data-bind="restore-file" accept=".json,application/json" hidden><button type="button" class="btn small" data-act="change-pw-open">Password</button><button type="button" class="btn small" data-act="gh-open">Publishing setup</button><button type="button" class="btn small" data-act="lock">Sign out</button></span></div>'+
     '<div class="pnav"><button type="button" class="iconbtn" data-act="pprev" aria-label="Previous period">'+ICON.prev+'</button>'+
@@ -700,6 +705,7 @@ function render(){
   if(S.gate!=='open'){renderGate();return}
   if(!S.ready)body='<div class="empty-state"><h2>Loading your saved rota…</h2><p>Your team and past schedules appear here in a moment.</p></div>';
   else if(S.tab==='schedule')body=scheduleHTML();
+  else if(S.tab==='table')body=tableTabHTML();
   else if(S.tab==='hours')body=hoursHTML();
   else if(S.tab==='setup')body=setupHTML();
   else body=teamHTML();
@@ -852,6 +858,26 @@ async function exportCSV(kind){
   catch(err){if(!err||err.code!=='declined')toast('Could not save the file here.')}
 }
 
+/* ---------- table view ---------- */
+var DOWF=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+function nameParts(n){var w=String(n||'').trim().split(/\s+/).filter(Boolean);return w.length?{ini:w.map(function(x){return x.charAt(0).toUpperCase()}).join(''),last:w[w.length-1]}:null}
+function tableHTML(p){
+  var hset=holidaySet(p),byId={};p.workers.forEach(function(w){byId[w.id]=w});
+  function who(d,id){var e=p.slots[d+'|'+id],w=e&&e.w?byId[e.w]:null;return w?nameParts(w.name):null}
+  function ini(d,id){var n=who(d,id);return '('+(n?n.ini:'—')+')'}
+  function ln(d,id){var n=who(d,id);return n?n.last:'—'}
+  var rows=periodDates(p.id).map(function(d){
+    var t=dayType(d,hset),txt,pd=parseD(d);
+    if(t==='weekday')txt=ln(d,'B')+' '+ini(d,'A');
+    else if(t==='weekend')txt=ini(d,'B')+' '+ln(d,'C')+' / '+ln(d,'D')+' '+ini(d,'A');
+    else txt=ini(d,'A')+' '+ln(d,'B')+' / '+ln(d,'C');
+    return '<tr'+(t==='weekday'?'':' class="alt"')+'><td>'+pd.d+' '+MON[pd.m]+' '+pd.y+'</td><td'+(hset[d]?' title="'+esc(hset[d])+'"':'')+'>'+DOWF[dow(d)]+(hset[d]?' <span class="chip accent">Holiday</span>':'')+'</td><td class="mono">'+esc(txt)+'</td></tr>';
+  }).join('');
+  return '<div class="tblwrap"><table class="ptable"><thead><tr><th>Date</th><th>Day</th><th>Scheduled</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<p class="note" style="margin-top:.8rem">Weekday: overnight surname and evening 4-hour initials. Weekend: afternoon initials and day surname / night surname and morning initials. Weekday holiday: morning initials and day surname / night surname. A dash means not assigned yet.</p>';
+}
+function tableTabHTML(){var p=cur();return p?tableHTML(p):emptyPeriodHTML()}
+
 /* ---------- public view (what visitors see) ---------- */
 async function loadSnap(){
   var d=null;
@@ -865,7 +891,7 @@ function pickPubPid(){
   var earlier=ids.filter(function(i){return i<=want});return earlier.length?earlier[earlier.length-1]:ids[0];
 }
 function publicHeaderHTML(){
-  var tabs=[['schedule','Schedule'],['hours','Hours'],['mine','By lab technologist']];
+  var tabs=[['schedule','Schedule'],['table','Table'],['hours','Hours'],['mine','By lab technologist']];
   return '<header><div class="brandline"><span><b>Bench Rota</b> · clinical laboratory shifts</span><span class="store">'+(S.pubAt?'Updated '+esc(fmtShort(S.pubAt.slice(0,10))):'')+'</span></div>'+
     '<div class="pnav"><button type="button" class="iconbtn" data-act="ppprev" aria-label="Previous period">'+ICON.prev+'</button>'+
     '<div class="plabel"><h1>'+esc(periodLabel(S.pid))+'</h1><div class="pmeta"><span>26th to 25th</span></div></div>'+
@@ -904,7 +930,7 @@ function publicMineHTML(){
     return '<div class="mrow"><div class="mdate"><b>'+esc(fmtLong(s.date))+'</b>'+(s.holidayName?'<span class="chip accent">'+esc(s.holidayName)+'</span>':'')+'</div><div class="mono">'+s.startClock+'–'+s.endClock+(s.overnight?' <span class="muted">+1 day</span>':'')+'</div><div class="muted">'+esc(s.label)+'</div><div class="mono mh">'+s.hours+'h</div></div>'}).join('')+'</div>';
 }
 function renderPublic(){
-  var y=window.scrollY,body=S.ptab==='hours'?hoursHTML():(S.ptab==='mine'?publicMineHTML():publicScheduleHTML());
+  var y=window.scrollY,body=S.ptab==='table'?tableTabHTML():(S.ptab==='hours'?hoursHTML():(S.ptab==='mine'?publicMineHTML():publicScheduleHTML()));
   document.getElementById('modal-root').innerHTML='';
   document.getElementById('app').innerHTML=publicHeaderHTML()+'<main>'+body+'</main><footer class="pubfoot"><button type="button" class="link" data-act="go-admin">Admin sign in</button></footer>';
   window.scrollTo(0,y);
