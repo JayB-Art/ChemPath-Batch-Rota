@@ -328,11 +328,21 @@ function searchSchedule(slots,workers,lockedMap,lv,restarts,shortIters,longIters
   });
   var mH=totH/n,mW=totW/n;
   var cap=workers.map(function(w){return w.maxHours>0?w.maxHours:Infinity});
+  /* people with two or more shift-length options ticked should get a mix of those types */
+  function clsOf(s){return s.short?0:(s.hours===12?(s.daytime?1:2):(s.hours===16?3:-1))}
+  var cls=slots.map(clsOf),mixOn=[],mixTypes=[];
+  workers.forEach(function(w,k){
+    var sel=[];if(w.onlyShort)sel.push(0);if(w.only12day||w.only12)sel.push(1);if(w.only12night||w.only12)sel.push(2);if(w.only16)sel.push(3);
+    var av=sel.filter(function(t){for(var i=0;i<m;i++)if(cls[i]===t&&ok[k][i])return true;return false});
+    mixTypes[k]=av;mixOn[k]=av.length>=2;
+  });
+  function mixTerm(w,c){if(!mixOn[w])return 0;var ts=mixTypes[w],tot=0,sc=0,j;for(j=0;j<ts.length;j++)tot+=c[ts[j]];var mean=tot/ts.length;for(j=0;j<ts.length;j++){if(c[ts[j]]===0)sc+=220;sc+=12*(c[ts[j]]-mean)*(c[ts[j]]-mean)}return sc}
+  function mixAdj(st,w,dec,inc){if(!mixOn[w])return 0;var c=st.C[w].slice();if(dec>=0)c[dec]--;if(inc>=0)c[inc]++;return mixTerm(w,c)}
   function term(h,hw){var a=h-mH,b=hw-mW;return a*a+0.15*b*b}
   function makeState(){
-    var st={assign:new Array(m).fill(-1),per:workers.map(function(){return []}),H:new Float64Array(n),HW:new Float64Array(n)};
-    st.place=function(i,w){st.assign[i]=w;st.per[w].push(i);st.H[w]+=slots[i].hours;if(slots[i].type!=='weekday')st.HW[w]+=slots[i].hours};
-    st.unplace=function(i){var w=st.assign[i];if(w<0)return;var a=st.per[w];a.splice(a.indexOf(i),1);st.H[w]-=slots[i].hours;if(slots[i].type!=='weekday')st.HW[w]-=slots[i].hours;st.assign[i]=-1};
+    var st={assign:new Array(m).fill(-1),per:workers.map(function(){return []}),H:new Float64Array(n),HW:new Float64Array(n),C:workers.map(function(){return [0,0,0,0]})};
+    st.place=function(i,w){st.assign[i]=w;st.per[w].push(i);st.H[w]+=slots[i].hours;if(slots[i].type!=='weekday')st.HW[w]+=slots[i].hours;if(cls[i]>=0)st.C[w][cls[i]]++};
+    st.unplace=function(i){var w=st.assign[i];if(w<0)return;var a=st.per[w];a.splice(a.indexOf(i),1);st.H[w]-=slots[i].hours;if(slots[i].type!=='weekday')st.HW[w]-=slots[i].hours;if(cls[i]>=0)st.C[w][cls[i]]--;st.assign[i]=-1};
     return st;
   }
   function valid(st,w,i,ign){
@@ -353,14 +363,14 @@ function searchSchedule(slots,workers,lockedMap,lv,restarts,shortIters,longIters
     order.sort(function(a,b){return elig[a]-elig[b]||slots[b].hours-slots[a].hours||rnd[a]-rnd[b]});
     order.forEach(function(i){
       var bw=-1,bs=Infinity;
-      for(var w=0;w<n;w++){if(!ok[w][i]||!valid(st,w,i,-1))continue;var sc=st.H[w]+Math.random()*noise;if(sc<bs){bs=sc;bw=w}}
+      for(var w=0;w<n;w++){if(!ok[w][i]||!valid(st,w,i,-1))continue;var sc=st.H[w]+Math.random()*noise+(cls[i]>=0&&mixOn[w]?0.3*(mixAdj(st,w,-1,cls[i])-mixAdj(st,w,-1,-1)):0);if(sc<bs){bs=sc;bw=w}}
       if(bw>=0)st.place(i,bw);
     });
     return st;
   }
   function cost(st){
     var c=0,w,i;for(i=0;i<m;i++)if(st.assign[i]<0)c+=1e5;
-    for(w=0;w<n;w++)c+=term(st.H[w],st.HW[w]);return c;
+    for(w=0;w<n;w++)c+=term(st.H[w],st.HW[w])+mixTerm(w,st.C[w]);return c;
   }
   var free=[];for(var q=0;q<m;q++)if(!lockedIdx[q])free.push(q);
   function improve(st,iters){
@@ -376,9 +386,9 @@ function searchSchedule(slots,workers,lockedMap,lv,restarts,shortIters,longIters
       var hi=slots[i].hours,wi=slots[i].type!=='weekday'?hi:0;
       var B=(Math.random()*n)|0;if(B===A)continue;
       if(Math.random()<0.6){for(t=0;t<2;t++){var c=(Math.random()*n)|0;if(c!==A&&st.H[c]<st.H[B])B=c}}
-      var base=term(st.H[A],st.HW[A])+term(st.H[B],st.HW[B]);
+      var base=term(st.H[A],st.HW[A])+term(st.H[B],st.HW[B])+mixTerm(A,st.C[A])+mixTerm(B,st.C[B]);
       if(ok[B][i]&&valid(st,B,i,-1)){
-        var d=term(st.H[A]-hi,st.HW[A]-wi)+term(st.H[B]+hi,st.HW[B]+wi)-base;
+        var d=term(st.H[A]-hi,st.HW[A]-wi)+term(st.H[B]+hi,st.HW[B]+wi)+mixAdj(st,A,cls[i],-1)+mixAdj(st,B,-1,cls[i])-base;
         if(d<-1e-9){st.unplace(i);st.place(i,B);continue}
       }
       var pb=st.per[B];if(!pb.length)continue;
@@ -386,7 +396,7 @@ function searchSchedule(slots,workers,lockedMap,lv,restarts,shortIters,longIters
       if(lockedIdx[j]||j===i||!ok[B][i]||!ok[A][j])continue;
       if(!valid(st,B,i,j)||!valid(st,A,j,i))continue;
       var hj=slots[j].hours,wj=slots[j].type!=='weekday'?hj:0;
-      var d2=term(st.H[A]-hi+hj,st.HW[A]-wi+wj)+term(st.H[B]+hi-hj,st.HW[B]+wi-wj)-base;
+      var d2=term(st.H[A]-hi+hj,st.HW[A]-wi+wj)+term(st.H[B]+hi-hj,st.HW[B]+wi-wj)+mixAdj(st,A,cls[i],cls[j])+mixAdj(st,B,cls[j],cls[i])-base;
       if(d2<-1e-9){st.unplace(i);st.unplace(j);st.place(i,B);st.place(j,A)}
     }
   }
