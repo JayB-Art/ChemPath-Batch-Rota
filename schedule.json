@@ -1,1 +1,304 @@
-{"at":null,"periods":{}}
+{
+ "at": "2026-10-18T05:10:11.183Z",
+ "periods": {
+  "2026-10": {
+   "id": "2026-10",
+   "workers": [
+    {
+     "id": "wl70x0blop",
+     "name": "Jabari Brown"
+    },
+    {
+     "id": "wb3k440v9n",
+     "name": "Shanay Clarke"
+    },
+    {
+     "id": "w360m43799",
+     "name": "Tiffaine Bassaragh"
+    },
+    {
+     "id": "w4dozoeolw",
+     "name": "Lorriane Ferguson"
+    },
+    {
+     "id": "w8q7oruo57",
+     "name": "Samantha Shippey"
+    },
+    {
+     "id": "wq8fxin29y",
+     "name": "Sikena Scott"
+    },
+    {
+     "id": "wkdughtfyp",
+     "name": "Jahmeil Cocker"
+    },
+    {
+     "id": "wua1yle1qj",
+     "name": "Janice Hunter-Thompson"
+    },
+    {
+     "id": "wyjj0jrdwq",
+     "name": "Norman Holness"
+    },
+    {
+     "id": "wp9qzlz3b1",
+     "name": "Ryan Foster"
+    },
+    {
+     "id": "wx23ot8int",
+     "name": "Kurt Vaz"
+    },
+    {
+     "id": "w8mmoxsvx2",
+     "name": "Junior Madray"
+    },
+    {
+     "id": "w88qdxfc3a",
+     "name": "Chevrado Cole"
+    },
+    {
+     "id": "wiyvbpfhm1",
+     "name": "Alesandro Splatt"
+    }
+   ],
+   "holidays": [],
+   "slots": {
+    "2026-10-26|A": {
+     "w": "wkdughtfyp",
+     "l": 1
+    },
+    "2026-10-26|B": {
+     "w": "wiyvbpfhm1"
+    },
+    "2026-10-27|A": {
+     "w": "wyjj0jrdwq"
+    },
+    "2026-10-27|B": {
+     "w": "wl70x0blop"
+    },
+    "2026-10-28|A": {
+     "w": "w360m43799"
+    },
+    "2026-10-28|B": {
+     "w": "wb3k440v9n"
+    },
+    "2026-10-29|A": {
+     "w": "wq8fxin29y"
+    },
+    "2026-10-29|B": {
+     "w": "wx23ot8int"
+    },
+    "2026-10-30|A": {
+     "w": "w88qdxfc3a"
+    },
+    "2026-10-30|B": {
+     "w": "wkdughtfyp"
+    },
+    "2026-10-31|A": {
+     "w": "w4dozoeolw"
+    },
+    "2026-10-31|B": {
+     "w": "wp9qzlz3b1"
+    },
+    "2026-10-31|C": {
+     "w": "wua1yle1qj"
+    },
+    "2026-10-31|D": {
+     "w": "wb3k440v9n"
+    },
+    "2026-11-01|A": {
+     "w": "w360m43799"
+    },
+    "2026-11-01|B": {
+     "w": "wq8fxin29y"
+    },
+    "2026-11-01|C": {
+     "w": "w8mmoxsvx2"
+    },
+    "2026-11-01|D": {
+     "w": "wyjj0jrdwq"
+    },
+    "2026-11-02|A": {
+     "w": "wb3k440v9n"
+    },
+    "2026-11-02|B": {
+     "w": "wl70x0blop"
+    },
+    "2026-11-03|A": {
+     "w": "wiyvbpfhm1"
+    },
+    "2026-11-03|B": {
+     "w": "wq8fxin29y"
+    },
+    "2026-11-04|A": {
+     "w": "wl70x0blop"
+    },
+    "2026-11-04|B": {
+     "w": "w4dozoeolw"
+    },
+    "2026-11-05|A": {
+     "w": "wl70x0blop"
+    },
+    "2026-11-05|B": {
+     "w": "wyjj0jrdwq"
+    },
+    "2026-11-06|A": {
+     "w": "wl70x0blop"
+    },
+    "2026-11-06|B": {
+     "w": "wq8fxin29y"
+    },
+    "2026-11-07|A": {
+     "w": "w4dozoeolw"
+    },
+    "2026-11-07|B": {
+     "w": "w360m43799"
+    },
+    "2026-11-07|C": {
+     "w": "wua1yle1qj"
+    },
+    "2026-11-07|D": {
+     "w": "w88qdxfc3a"
+    },
+    "2026-11-08|A": {
+     "w": "wp9qzlz3b1"
+    },
+    "2026-11-08|B": {
+     "w": "w4dozoeolw"
+    },
+    "2026-11-08|C": {
+     "w": "wyjj0jrdwq"
+    },
+    "2026-11-08|D": {
+     "w": "wkdughtfyp"
+    },
+    "2026-11-09|A": {
+     "w": "wb3k440v9n"
+    },
+    "2026-11-09|B": {
+     "w": "w360m43799"
+    },
+    "2026-11-10|A": {
+     "w": "wkdughtfyp"
+    },
+    "2026-11-10|B": {
+     "w": "wyjj0jrdwq"
+    },
+    "2026-11-11|A": {
+     "w": "wua1yle1qj"
+    },
+    "2026-11-11|B": {
+     "w": "w360m43799"
+    },
+    "2026-11-12|A": {
+     "w": "wkdughtfyp"
+    },
+    "2026-11-12|B": {
+     "w": "w4dozoeolw"
+    },
+    "2026-11-13|A": {
+     "w": "wua1yle1qj"
+    },
+    "2026-11-13|B": {
+     "w": "w360m43799"
+    },
+    "2026-11-14|A": {
+     "w": "wq8fxin29y"
+    },
+    "2026-11-14|B": {
+     "w": "wiyvbpfhm1"
+    },
+    "2026-11-14|C": {
+     "w": "w8q7oruo57"
+    },
+    "2026-11-14|D": {
+     "w": "w8mmoxsvx2"
+    },
+    "2026-11-15|A": {
+     "w": "wq8fxin29y"
+    },
+    "2026-11-15|B": {
+     "w": "w360m43799"
+    },
+    "2026-11-15|C": {
+     "w": "wb3k440v9n"
+    },
+    "2026-11-15|D": {
+     "w": "wx23ot8int"
+    },
+    "2026-11-16|A": {
+     "w": "wl70x0blop"
+    },
+    "2026-11-16|B": {
+     "w": "w8mmoxsvx2"
+    },
+    "2026-11-17|A": {
+     "w": "w360m43799"
+    },
+    "2026-11-17|B": {
+     "w": "wkdughtfyp"
+    },
+    "2026-11-18|A": {
+     "w": "w4dozoeolw"
+    },
+    "2026-11-18|B": {
+     "w": "wb3k440v9n"
+    },
+    "2026-11-19|A": {
+     "w": "wl70x0blop"
+    },
+    "2026-11-19|B": {
+     "w": "wq8fxin29y"
+    },
+    "2026-11-20|A": {
+     "w": "wua1yle1qj"
+    },
+    "2026-11-20|B": {
+     "w": "wx23ot8int"
+    },
+    "2026-11-21|A": {
+     "w": "wp9qzlz3b1"
+    },
+    "2026-11-21|B": {
+     "w": "w88qdxfc3a"
+    },
+    "2026-11-21|C": {
+     "w": "w8q7oruo57"
+    },
+    "2026-11-21|D": {
+     "w": "wiyvbpfhm1"
+    },
+    "2026-11-22|A": {
+     "w": "w4dozoeolw"
+    },
+    "2026-11-22|B": {
+     "w": "wkdughtfyp"
+    },
+    "2026-11-22|C": {
+     "w": "wx23ot8int"
+    },
+    "2026-11-22|D": {
+     "w": "wl70x0blop"
+    },
+    "2026-11-23|A": {
+     "w": "wq8fxin29y"
+    },
+    "2026-11-23|B": {
+     "w": "w8mmoxsvx2"
+    },
+    "2026-11-24|A": {
+     "w": "wkdughtfyp"
+    },
+    "2026-11-24|B": {
+     "w": "w88qdxfc3a"
+    },
+    "2026-11-25|A": {
+     "w": "wyjj0jrdwq"
+    },
+    "2026-11-25|B": {
+     "w": "w4dozoeolw"
+    }
+   }
+  }
+ }
+}
