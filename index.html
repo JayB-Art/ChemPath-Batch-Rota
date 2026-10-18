@@ -330,14 +330,17 @@ function searchSchedule(slots,workers,lockedMap,lv,restarts,shortIters,longIters
   var cap=workers.map(function(w){return w.maxHours>0?w.maxHours:Infinity});
   /* people with two or more shift-length options ticked should get a mix of those types */
   function clsOf(s){return s.short?0:(s.hours===12?(s.daytime?1:2):(s.hours===16?3:-1))}
-  var cls=slots.map(clsOf),mixOn=[],mixTypes=[];
+  var cls=slots.map(clsOf),mixOn=[],mixTypes=[],need4=[];
   workers.forEach(function(w,k){
     var sel=[];if(w.onlyShort)sel.push(0);if(w.only12day||w.only12)sel.push(1);if(w.only12night||w.only12)sel.push(2);if(w.only16)sel.push(3);
     var av=sel.filter(function(t){for(var i=0;i<m;i++)if(cls[i]===t&&ok[k][i])return true;return false});
     mixTypes[k]=av;mixOn[k]=av.length>=2;
+    /* 4-hour plus a 12-hour option: at least three 4-hour shifts to top up their hours */
+    var n4=0;for(var q=0;q<m;q++)if(cls[q]===0&&ok[k][q])n4++;
+    need4[k]=(w.onlyShort&&(w.only12day||w.only12night||w.only12))?Math.min(3,n4):0;
   });
-  function mixTerm(w,c){if(!mixOn[w])return 0;var ts=mixTypes[w],tot=0,sc=0,j;for(j=0;j<ts.length;j++)tot+=c[ts[j]];var mean=tot/ts.length;for(j=0;j<ts.length;j++){if(c[ts[j]]===0)sc+=220;sc+=1*(c[ts[j]]-mean)*(c[ts[j]]-mean)}return sc}
-  function mixAdj(st,w,dec,inc){if(!mixOn[w])return 0;var c=st.C[w].slice();if(dec>=0)c[dec]--;if(inc>=0)c[inc]++;return mixTerm(w,c)}
+  function mixTerm(w,c){var sc=0;if(need4[w]&&c[0]<need4[w])sc+=400*(need4[w]-c[0]);if(!mixOn[w])return sc;var ts=mixTypes[w],tot=0,j;for(j=0;j<ts.length;j++)tot+=c[ts[j]];var mean=tot/ts.length;for(j=0;j<ts.length;j++){if(c[ts[j]]===0)sc+=220;sc+=1*(c[ts[j]]-mean)*(c[ts[j]]-mean)}return sc}
+  function mixAdj(st,w,dec,inc){if(!mixOn[w]&&!need4[w])return 0;var c=st.C[w].slice();if(dec>=0)c[dec]--;if(inc>=0)c[inc]++;return mixTerm(w,c)}
   function term(h,hw){var a=h-mH,b=hw-mW;return a*a+0.15*b*b}
   function makeState(){
     var st={assign:new Array(m).fill(-1),per:workers.map(function(){return []}),H:new Float64Array(n),HW:new Float64Array(n),C:workers.map(function(){return [0,0,0,0]})};
@@ -363,7 +366,7 @@ function searchSchedule(slots,workers,lockedMap,lv,restarts,shortIters,longIters
     order.sort(function(a,b){return elig[a]-elig[b]||slots[b].hours-slots[a].hours||rnd[a]-rnd[b]});
     order.forEach(function(i){
       var bw=-1,bs=Infinity;
-      for(var w=0;w<n;w++){if(!ok[w][i]||!valid(st,w,i,-1))continue;var sc=st.H[w]+Math.random()*noise+(cls[i]>=0&&mixOn[w]?0.3*(mixAdj(st,w,-1,cls[i])-mixAdj(st,w,-1,-1)):0);if(sc<bs){bs=sc;bw=w}}
+      for(var w=0;w<n;w++){if(!ok[w][i]||!valid(st,w,i,-1))continue;var sc=st.H[w]+Math.random()*noise+(cls[i]>=0&&(mixOn[w]||need4[w])?0.3*(mixAdj(st,w,-1,cls[i])-mixAdj(st,w,-1,-1)):0);if(sc<bs){bs=sc;bw=w}}
       if(bw>=0)st.place(i,bw);
     });
     return st;
@@ -737,7 +740,7 @@ function workerModalHTML(){
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-12d"'+(d.only12day?' checked':'')+'>Only 12-hour day shifts (8:30 AM to 8:30 PM, weekends and holidays)</label>';
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-12n"'+(d.only12night?' checked':'')+'>Only 12-hour night shifts (8:30 PM to 8:30 AM, weekends and holidays)</label>';
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-16"'+(d.only16?' checked':'')+'>Only 16-hour shifts (weekday overnight)</label>';
-  h+='<span class="note">Tick more than one to allow a mix, for example 4-hour and 12-hour night shifts.</span>';
+  h+='<span class="note">Tick more than one to allow a mix. With 4-hour and a 12-hour option both ticked, the person gets at least three 4-hour shifts.</span>';
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-day"'+(d.daytimeOnly?' checked':'')+'>Only between 8:30am and 8:30pm</label>';
   h+='<div class="field" style="max-width:14rem"><label for="wmax">Maximum hours per period</label><input type="text" inputmode="numeric" id="wmax" data-bind="wmax" value="'+esc(d.maxHours)+'" placeholder="No limit" autocomplete="off"></div>';
   h+='<div><div class="lbl" style="margin-bottom:.35rem" id="dp-l">Can work on</div><div class="daypick" role="group" aria-labelledby="dp-l">'+order.map(function(x){return '<button type="button" data-act="wk-day" data-d="'+x+'" aria-pressed="'+(d.days.indexOf(x)>=0)+'">'+DOW[x]+'</button>'}).join('')+'</div></div>';
