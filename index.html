@@ -212,6 +212,11 @@ input[type=checkbox]{width:1.15rem;height:1.15rem;accent-color:var(--accent);fle
 .tblwrap{overflow-x:auto;max-width:100%}
 .hol{display:inline-block;margin-left:.55rem;padding:.08rem .55rem;border-radius:99px;font-size:.72rem;font-weight:700;letter-spacing:.02em;background:var(--accent-soft);color:var(--accent);vertical-align:middle}
 .ptable td.num,.ptable th.num{text-align:right}
+.secnav{display:flex;gap:.5rem;margin:.4rem 0 1rem;flex-wrap:wrap}
+.secbtn{font:inherit;font-weight:700;padding:.5rem 1.1rem;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);cursor:pointer}
+.secbtn[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.rsel{min-width:11rem;max-width:16rem}
+.ptable td.cur,.ptable th.cur{background:var(--accent-soft)}
 .tbltools{display:flex;justify-content:flex-end;margin-bottom:.6rem}
 .pubview .day .shift{cursor:default}.pubview .day .shift:hover{background:none;border-color:transparent}
 .pubfoot{margin-top:2.5rem;padding-top:1rem;border-top:1px solid var(--line);text-align:center}
@@ -515,7 +520,7 @@ function workerReasons(period,slots,worker,slot){
 'use strict';
 var S={ready:false,mode:'loading',roster:{workers:[],lastAvailable:[]},periods:{},pid:null,tab:'schedule',draft:null,
   modal:null,hl:'',undo:null,expanded:{},clearPins:false,
-  view:'public',pub:{},pubAt:null,ptab:'schedule',who:'',gate:'loading',gateErr:null,auth:null,unlocked:false,backendReady:false,remote:false,dataReady:false,me:null,admins:[],pending:null,gateInfo:null};
+  view:'public',pub:{},pubAt:null,ptab:'schedule',who:'',gate:'loading',gateErr:null,auth:null,unlocked:false,backendReady:false,remote:false,dataReady:false,sec:'emergency',rotation:{},pubRotation:{},rtab:'rot',prtab:'st',mkey:null,pwho:'',me:null,admins:[],pending:null,gateInfo:null};
 /* ===== SETTINGS: fill these in before use (see README) ===== */
 var CONFIG={
   approverEmail:'jabarigbrown@gmail.com',                 // the one address that receives approval codes
@@ -556,7 +561,7 @@ var REM={sha:null,data:null};
 function ghHeaders(){return {'Authorization':'Bearer '+ghToken(),'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'}}
 function dataUrl(){var d=CONFIG.data;return 'https://api.github.com/repos/'+d.owner+'/'+d.repo+'/contents/'+d.path}
 function b64d(x){return decodeURIComponent(escape(atob(String(x).replace(/\s/g,''))))}
-function isRemotePath(path){return path==='settings/roster'||path.indexOf('periods/')===0}
+function isRemotePath(path){return path==='settings/roster'||path.indexOf('periods/')===0||path.indexOf('rotation/')===0}
 function ghMsg(e){
   var st=e&&e.status;
   if(st===401)return 'GitHub rejected the token. Check it under GitHub connection.';
@@ -592,6 +597,7 @@ async function remoteWrite(mutate){
 function applyRemote(d){
   S.roster={workers:(d.roster&&d.roster.workers)||[],lastAvailable:(d.roster&&d.roster.lastAvailable)||[]};
   S.periods={};Object.keys(d.periods||{}).forEach(function(id){var p=d.periods[id];if(p&&p.id)S.periods[p.id]=p});
+  S.rotation={};Object.keys(d.rotation||{}).forEach(function(id){var r=d.rotation[id];if(r&&r.id)S.rotation[r.id]=r});
 }
 async function bootData(){
   if(S.dataReady){S.gate='open';afterUnlock();render();window.scrollTo(0,0);return}
@@ -603,8 +609,8 @@ async function bootData(){
     else{
       /* first time: move anything already saved in this browser into the data repository */
       REM.sha=null;REM.data=null;
-      var seedR=clone(S.roster),seedP=clone(S.periods);
-      await remoteWrite(function(d){d.roster=seedR;d.periods=seedP});
+      var seedR=clone(S.roster),seedP=clone(S.periods),seedT=clone(S.rotation);
+      await remoteWrite(function(d){d.roster=seedR;d.periods=seedP;d.rotation=seedT});
     }
     S.remote=true;S.dataReady=true;S.ready=true;S.gate='open';
     afterUnlock();render();window.scrollTo(0,0);
@@ -613,7 +619,7 @@ async function bootData(){
 function persist(path,data){
   var snap=clone(data);
   writeChain=writeChain.then(function(){
-    if(S.remote&&isRemotePath(path))return remoteWrite(function(d){if(path==='settings/roster')d.roster=snap;else d.periods[path.slice(8)]=snap});
+    if(S.remote&&isRemotePath(path))return remoteWrite(function(d){if(path==='settings/roster')d.roster=snap;else if(path.indexOf('rotation/')===0){d.rotation=d.rotation||{};d.rotation[path.slice(9)]=snap}else d.periods[path.slice(8)]=snap});
     return DB?DB.doc(path).set(snap):lsSet(path,snap);
   }).catch(function(err){
     try{console.error(err)}catch(e){}
@@ -631,7 +637,7 @@ async function loadAll(){
     q.docs.forEach(function(d){if(d.exists)list.push(clone(d.data()))});
   }else{
     r=lsGet('settings/roster');
-    try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.indexOf('benchrota:periods/')===0){var v=lsGet(k.slice(10));if(v)list.push(v)}}}catch(e){}
+    try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.indexOf('benchrota:periods/')===0){var v=lsGet(k.slice(10));if(v)list.push(v)}if(k&&k.indexOf('benchrota:rotation/')===0){var rv=lsGet(k.slice(10));if(rv&&rv.id)S.rotation[rv.id]=rv}}}catch(e){}
   }
   if(r&&r.workers)S.roster={workers:r.workers,lastAvailable:r.lastAvailable||[]};
   list.forEach(function(p){if(p&&p.id)S.periods[p.id]=p});
@@ -652,14 +658,15 @@ function closeModal(){S.modal=null;renderModal()}
 function headerHTML(){
   var p=cur(),status=!S.ready?'':(p?'<span class="status built">Schedule built</span>':'<span class="status todo">Needs setup</span>');
   var store=S.remote?'Saved to GitHub (private data repository)':S.mode==='db'?'Saved with this page':(S.mode==='local'?'Saved in this browser only':'Loading…');
-  var tabs=[['schedule','Schedule'],['table','Table'],['hours','Hours'],['stats','Statistics'],['setup','Setup'],['team','Team']];
+  var rt=S.sec==='routine',tabs=rt?[['rot','Rotation'],['hist','History']]:[['schedule','Schedule'],['table','Table'],['hours','Hours'],['stats','Statistics'],['setup','Setup'],['team','Team']];
+  if(rt)status='';
   return '<header>'+
     '<div class="brandline"><span><b>Bench Rota</b> · admin</span><span class="store">'+store+(S.me?' · Signed in as '+esc(meName()):'')+'</span><span class="row" style="gap:.4rem;letter-spacing:0;text-transform:none"><button type="button" class="btn small primary" data-act="publish">Publish schedule</button><button type="button" class="btn small" data-act="download-json">Download file</button><button type="button" class="btn small" data-act="backup">Backup</button><button type="button" class="btn small" data-act="restore">Restore</button><input type="file" id="restore-file" data-bind="restore-file" accept=".json,application/json" hidden><button type="button" class="btn small" data-act="change-pw-open">Password</button><button type="button" class="btn small" data-act="gh-open">Publishing setup</button><button type="button" class="btn small" data-act="lock">Sign out</button></span></div>'+
-    '<div class="pnav"><button type="button" class="iconbtn" data-act="pprev" aria-label="Previous period">'+ICON.prev+'</button>'+
+    secNavHTML()+(rt?monthNavHTML():'<div class="pnav"><button type="button" class="iconbtn" data-act="pprev" aria-label="Previous period">'+ICON.prev+'</button>'+
     '<div class="plabel"><h1>'+esc(periodLabel(S.pid))+'</h1><div class="pmeta"><span>26th to 25th</span>'+status+'</div></div>'+
-    '<button type="button" class="iconbtn" data-act="pnext" aria-label="Next period">'+ICON.next+'</button></div>'+
+    '<button type="button" class="iconbtn" data-act="pnext" aria-label="Next period">'+ICON.next+'</button></div>')+
     '<nav class="tabs" role="tablist" aria-label="Sections">'+tabs.map(function(t){
-      return '<button type="button" role="tab" class="tab" data-act="tab" data-tab="'+t[0]+'" aria-selected="'+(S.tab===t[0])+'">'+t[1]+'</button>'}).join('')+'</nav></header>';
+      return '<button type="button" role="tab" class="tab" data-act="'+(rt?'rtab':'tab')+'" data-tab="'+t[0]+'" aria-selected="'+((rt?S.rtab:S.tab)===t[0])+'">'+t[1]+'</button>'}).join('')+'</nav></header>';
 }
 function emptyPeriodHTML(why){
   if(S.view==='public')return '<div class="empty-state"><h2>No schedule published for '+esc(periodLabel(S.pid))+' yet</h2><p>Please check back once the new schedule has been published.</p></div>';
@@ -792,6 +799,7 @@ function render(){
   if(S.view==='public'){renderPublic();return}
   if(S.gate!=='open'){renderGate();return}
   if(!S.ready)body='<div class="empty-state"><h2>Loading your saved rota…</h2><p>Your team and past schedules appear here in a moment.</p></div>';
+  else if(S.sec==='routine')body=S.rtab==='hist'?rotationHistoryHTML():rotationHTML();
   else if(S.tab==='schedule')body=scheduleHTML();
   else if(S.tab==='table')body=tableTabHTML();
   else if(S.tab==='stats')body=statsHTML();
@@ -840,6 +848,7 @@ function workerModalHTML(){
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-12n"'+(d.only12night?' checked':'')+'>Only 12-hour night shifts (8:30 PM to 8:30 AM, weekends and holidays)</label>';
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-16"'+(d.only16?' checked':'')+'>Only 16-hour shifts (weekday overnight)</label>';
   h+='<span class="note">Tick more than one to allow a mix. With 4-hour and a 12-hour option both ticked, the person gets at least three 4-hour shifts. Everyone else who can work 4-hour shifts gets at least two, unless they opt out here or are limited to 12-hour or 16-hour shifts only.</span>';
+  h+='<div class="field"><label>Routine stations this person can rotate on</label>'+AREAS.map(function(a){return '<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-st" data-area="'+a[0]+'"'+(d.stations.indexOf(a[0])>=0?' checked':'')+'>'+esc(a[1])+'</label>'}).join('')+'<span class="note">Untick any station they must not work. Untick all to leave them out of the Routine rotation.</span></div>';
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-day"'+(d.daytimeOnly?' checked':'')+'>Only between 8:30am and 8:30pm</label>';
   h+='<div class="field" style="max-width:14rem"><label for="wmax">Maximum hours per period</label><input type="text" inputmode="numeric" id="wmax" data-bind="wmax" value="'+esc(d.maxHours)+'" placeholder="No limit" autocomplete="off"></div>';
   h+='<div><div class="lbl" style="margin-bottom:.35rem" id="dp-l">Can work on</div><div class="daypick" role="group" aria-labelledby="dp-l">'+order.map(function(x){return '<button type="button" data-act="wk-day" data-d="'+x+'" aria-pressed="'+(d.days.indexOf(x)>=0)+'">'+DOW[x]+'</button>'}).join('')+'</div></div>';
@@ -1176,12 +1185,151 @@ function exportStatsXlsx(){
   toast('Excel file downloaded.');
 }
 
+/* ---------- Routine: monthly station rotation ---------- */
+var AREAS=[['rec','Reception','Reception'],['rc','Routine Chemistry - C503','Routine Chem'],['sc','Special Chemistry - E802','Special Chem'],['gl','Glucose - C503 Sub','Glucose'],['ver','Verification','Verification'],['uri','Urinalysis','Urinalysis'],['mu','Manual Urine Chemistry','Manual Urine']];
+var MONF=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function areaName(id){for(var i=0;i<AREAS.length;i++)if(AREAS[i][0]===id)return AREAS[i][1];return '—'}
+function areaShort(id){for(var i=0;i<AREAS.length;i++)if(AREAS[i][0]===id)return AREAS[i][2];return '—'}
+function monthLabel(k){return MONF[+k.slice(5,7)-1]+' '+k.slice(0,4)}
+function monthIdx(k){return +k.slice(0,4)*12+ +k.slice(5,7)}
+function addMonths(k,n){var m=+k.slice(5,7)-1+n,y=+k.slice(0,4)+Math.floor(m/12);m=((m%12)+12)%12;return y+'-'+('0'+(m+1)).slice(-2)}
+function allowedAreas(w){return Array.isArray(w.stations)?w.stations:AREAS.map(function(a){return a[0]})}
+function saveRotation(k){return persist('rotation/'+k,S.rotation[k])}
+function rotGet(k){return S.rotation[k]||(S.rotation[k]={id:k,assign:{}})}
+function byName(a,b){return a.name.localeCompare(b.name)}
+/* Build one month. Rules: exactly 2 people on Reception; nobody repeats last month's station (unless set by hand);
+   only allowed stations; every other station covered where possible; loads kept even. Hand-set choices are kept. */
+function rotationBuild(k){
+  var r=rotGet(k),man=r.manual||{},prevA=(S.rotation[addMonths(k,-1)]||{}).assign||{};
+  var ws=S.roster.workers.filter(function(w){return allowedAreas(w).length}),fixed={},free=[],skipped=[],since={};
+  ws.forEach(function(w){since[w.id]={}});
+  Object.keys(S.rotation).filter(function(m){return m<k}).sort().forEach(function(m){
+    var gap=monthIdx(k)-monthIdx(m),a=S.rotation[m].assign||{};
+    Object.keys(a).forEach(function(wid){if(since[wid]){var c=since[wid][a[wid]];if(c==null||gap<c)since[wid][a[wid]]=gap}});
+  });
+  ws.forEach(function(w){
+    if(man[w.id]&&r.assign[w.id]){fixed[w.id]=r.assign[w.id];return}
+    var al=allowedAreas(w).filter(function(a){return a!==prevA[w.id]});
+    if(!al.length){skipped.push(w.name);return}
+    free.push({w:w,al:al});
+  });
+  function cost(w,ar){var g=since[w.id][ar];if(g==null||g>13)g=13;return (13-g)*(13-g)/4}
+  var base={};AREAS.forEach(function(a){base[a[0]]=0});Object.keys(fixed).forEach(function(id){base[fixed[id]]++});
+  var n=free.length,people=n+Object.keys(fixed).length,avg=Math.max(0,people-2)/(AREAS.length-1);
+  function total(asg){
+    var load={},c=0,i;AREAS.forEach(function(a){load[a[0]]=base[a[0]]});
+    for(i=0;i<n;i++){c+=cost(free[i].w,asg[i]);load[asg[i]]++}
+    AREAS.forEach(function(a){
+      var l=load[a[0]];
+      if(a[0]==='rec')c+=500*Math.abs(l-2);
+      else{c+=25*(l-avg)*(l-avg);if(l===0&&free.some(function(f){return f.al.indexOf(a[0])>=0}))c+=400}
+    });
+    return c;
+  }
+  var best=[],bestC=Infinity,rr,i,j;
+  for(rr=0;rr<80&&n;rr++){
+    var asg=free.map(function(f){return f.al[Math.floor(Math.random()*f.al.length)]}),cur=total(asg),imp=true,guard=0;
+    while(imp&&guard++<80){
+      imp=false;
+      for(i=0;i<n;i++){
+        free[i].al.forEach(function(ar){
+          if(ar===asg[i])return;var old=asg[i];asg[i]=ar;var c=total(asg);
+          if(c<cur-1e-9){cur=c;imp=true}else asg[i]=old;
+        });
+      }
+      for(i=0;i<n;i++)for(j=i+1;j<n;j++){
+        if(asg[i]===asg[j]||free[i].al.indexOf(asg[j])<0||free[j].al.indexOf(asg[i])<0)continue;
+        var t=asg[i];asg[i]=asg[j];asg[j]=t;var c2=total(asg);
+        if(c2<cur-1e-9){cur=c2;imp=true}else{t=asg[i];asg[i]=asg[j];asg[j]=t}
+      }
+    }
+    if(cur<bestC){bestC=cur;best=asg.slice()}
+  }
+  var out={},rec=0;
+  Object.keys(fixed).forEach(function(id){out[id]=fixed[id]});
+  free.forEach(function(f,q){out[f.w.id]=best[q]});
+  Object.keys(out).forEach(function(id){if(out[id]==='rec')rec++});
+  return {assign:out,skipped:skipped,rec:rec};
+}
+function secNavHTML(){
+  return '<nav class="secnav" role="tablist" aria-label="Rota type">'+[['emergency','Emergency Duty'],['routine','Routine']].map(function(t){
+    return '<button type="button" role="tab" class="secbtn" data-act="sec" data-sec="'+t[0]+'" aria-selected="'+(S.sec===t[0])+'">'+t[1]+'</button>'}).join('')+'</nav>';
+}
+function monthNavHTML(){
+  return '<div class="pnav"><button type="button" class="iconbtn" data-act="mprev" aria-label="Previous month">'+ICON.prev+'</button><div class="plabel"><h1>'+esc(monthLabel(S.mkey))+'</h1><div class="pmeta"><span>Calendar month</span></div></div><button type="button" class="iconbtn" data-act="mnext" aria-label="Next month">'+ICON.next+'</button></div>';
+}
+function stationSummary(byArea){
+  return '<div class="tblwrap"><table class="ptable"><thead><tr><th>Station</th><th>Lab technologists</th><th class="num">People</th></tr></thead><tbody>'+
+    AREAS.map(function(a){var l=(byArea[a[0]]||[]).slice().sort();return '<tr><td>'+esc(a[1])+'</td><td>'+(l.length?esc(l.join(', ')):'<span class="chip warn">No one assigned</span>')+'</td><td class="num mono">'+l.length+'</td></tr>'}).join('')+'</tbody></table></div>';
+}
+function rotationHTML(){
+  var k=S.mkey,r=S.rotation[k]||{assign:{}},prev=S.rotation[addMonths(k,-1)],pa=(prev&&prev.assign)||{};
+  var ws=S.roster.workers.slice().sort(byName);
+  if(!ws.length)return '<div class="empty-state"><h2>Your team is empty</h2><p>Add lab technologists in the Team tab under Emergency Duty first.</p></div>';
+  var inR=ws.filter(function(w){return allowedAreas(w).length}),out=ws.filter(function(w){return !allowedAreas(w).length});
+  var rows=inR.map(function(w){
+    var cur=r.assign[w.id]||'',al=allowedAreas(w),same=cur&&pa[w.id]===cur,man=r.manual&&r.manual[w.id];
+    return '<tr><td>'+esc(w.name)+'</td><td><select class="rsel" data-bind="rotcell" data-wid="'+esc(w.id)+'"><option value="">—</option>'+
+      AREAS.filter(function(a){return al.indexOf(a[0])>=0}).map(function(a){return '<option value="'+a[0]+'"'+(cur===a[0]?' selected':'')+'>'+esc(a[1])+'</option>'}).join('')+'</select>'+(man?' <span class="chip">manual</span>':(cur?'':' <span class="chip warn">Needs a station</span>'))+'</td>'+
+      '<td>'+esc(pa[w.id]?areaName(pa[w.id]):'—')+(same?(man?' <span class="chip">Same as last month (manual)</span>':' <span class="chip warn">Same as last month</span>'):'')+'</td><td class="muted">'+(al.length===AREAS.length?'All stations':al.length+' of '+AREAS.length+' stations')+'</td></tr>';
+  }).join('');
+  var byArea={};Object.keys(r.assign).forEach(function(wid){var w=ws.filter(function(x){return x.id===wid})[0];if(w&&r.assign[wid])(byArea[r.assign[wid]]=byArea[r.assign[wid]]||[]).push(w.name)});
+  var recN=(byArea.rec||[]).length;
+  return '<div class="toolbar"><span class="note">Each lab technologist works one station for the whole calendar month. <span class="chip'+(recN===2?'':' warn')+'">Reception '+recN+' of 2</span></span><span class="row"><button type="button" class="btn small primary" data-act="rbuild">Build rotation</button><button type="button" class="btn small danger" data-act="rclear">Clear month</button></span></div>'+
+    '<div class="tblwrap"><table class="ptable"><thead><tr><th>Lab technologist</th><th>Station for '+esc(monthLabel(k))+'</th><th>Last month</th><th>Allowed</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    (out.length?'<p class="note" style="margin-top:.8rem">Not in the rotation (no stations allowed): '+esc(out.map(function(w){return w.name}).join(', '))+'.</p>':'')+
+    '<h3 class="wk">By station</h3>'+stationSummary(byArea)+
+    '<p class="note" style="margin-top:.8rem">Build rotation puts exactly 2 people on Reception, never repeats a person’s station from last month, keeps every other station covered where it can, and only uses allowed stations. Anything you choose by hand is kept when you rebuild and may repeat last month’s station. Use Clear month to start over. Click <b>Publish schedule</b> to show it on the public page.</p>';
+}
+function rotationHistoryHTML(){
+  var k=S.mkey,months=[];for(var i=5;i>=0;i--)months.push(addMonths(k,-i));
+  var ws=S.roster.workers.filter(function(w){return allowedAreas(w).length}).sort(byName);
+  if(!ws.length)return '<div class="empty-state"><h2>No one is in the rotation yet</h2></div>';
+  return '<div class="tblwrap"><table class="ptable"><thead><tr><th>Lab technologist</th>'+months.map(function(m){return '<th'+(m===k?' class="cur"':'')+'>'+esc(monthLabel(m))+'</th>'}).join('')+'</tr></thead><tbody>'+
+    ws.map(function(w){return '<tr><td>'+esc(w.name)+'</td>'+months.map(function(m){var a=(S.rotation[m]&&S.rotation[m].assign||{})[w.id];return '<td'+(m===k?' class="cur"':'')+'>'+esc(a?areaShort(a):'—')+'</td>'}).join('')+'</tr>'}).join('')+'</tbody></table></div>';
+}
+function rotationClear(){
+  var k=S.mkey,r=S.rotation[k];if(!r||!Object.keys(r.assign).length)return;
+  S.rundo={k:k,assign:clone(r.assign),manual:clone(r.manual||{})};r.assign={};r.manual={};saveRotation(k);render();
+  toast('Rotation cleared for '+monthLabel(k)+'.','Undo',function(){var u=S.rundo;if(!u)return;var x=rotGet(u.k);x.assign=u.assign;x.manual=u.manual;saveRotation(u.k);S.rundo=null;render()});
+}
+function rotationBuildAct(){
+  var k=S.mkey,r=rotGet(k),had=Object.keys(r.assign).length?clone(r.assign):null;
+  var res=rotationBuild(k);r.assign=res.assign;saveRotation(k);render();
+  var msg='Rotation built for '+monthLabel(k)+'.';
+  if(res.skipped.length)msg='Built. Choose a station by hand for: '+res.skipped.join(', ')+' (their only allowed station was used last month).';
+  else if(res.rec!==2)msg='Built, but Reception has '+res.rec+' (it needs 2). Check who is allowed on Reception.';
+  toast(msg,had?'Undo':null,had?function(){rotGet(k).assign=had;saveRotation(k);render()}:null);
+}
+/* public side */
+function pickPubMonth(){
+  var cur=todayStr().slice(0,7),ids=Object.keys(S.pubRotation||{}).sort();
+  if(!ids.length||S.pubRotation[cur])return cur;
+  var e=ids.filter(function(i){return i<=cur});return e.length?e[e.length-1]:ids[0];
+}
+function rotationStationsHTML(){
+  var r=S.pubRotation[S.mkey];
+  if(!r)return '<div class="empty-state"><h2>No rotation published for '+esc(monthLabel(S.mkey))+' yet</h2><p>Please check back once it has been published.</p></div>';
+  var by={};Object.keys(r.assign).forEach(function(n){(by[r.assign[n]]=by[r.assign[n]]||[]).push(n)});
+  return stationSummary(by);
+}
+function rotationPersonHTML(){
+  var set={},ids=Object.keys(S.pubRotation).sort();
+  ids.forEach(function(m){Object.keys(S.pubRotation[m].assign).forEach(function(n){set[n]=1})});
+  var names=Object.keys(set).sort();
+  if(!names.length)return '<div class="empty-state"><h2>No rotation published yet</h2></div>';
+  var h='<div class="toolbar"><div class="field"><label for="pwho">Choose a lab technologist</label><select id="pwho" data-bind="pwho"><option value="">Select a name…</option>'+names.map(function(n){return '<option value="'+esc(n)+'"'+(S.pwho===n?' selected':'')+'>'+esc(n)+'</option>'}).join('')+'</select></div></div>';
+  if(!S.pwho||!set[S.pwho])return h+'<p class="note">Pick a name to see that person’s station each month. Other people are not shown.</p>';
+  var rows=ids.filter(function(m){return S.pubRotation[m].assign[S.pwho]}).map(function(m){return '<tr><td'+(m===S.mkey?' class="cur"':'')+'>'+esc(monthLabel(m))+'</td><td'+(m===S.mkey?' class="cur"':'')+'>'+esc(areaName(S.pubRotation[m].assign[S.pwho]))+'</td></tr>'}).join('');
+  return h+'<div class="tblwrap"><table class="ptable"><thead><tr><th>Month</th><th>Station</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+
 /* ---------- public view (what visitors see) ---------- */
 async function loadSnap(){
   var d=null;
   try{var r=await fetch('schedule.json',{cache:'no-store'});if(r.ok)d=await r.json()}catch(e){d=null}
   if(!d){try{d=JSON.parse(document.getElementById('snap').textContent||'{}')}catch(e){d={}}}
-  S.pub=(d&&d.periods)||{};S.pubAt=(d&&d.at)||null;
+  S.pub=(d&&d.periods)||{};S.pubRotation=(d&&d.rotation)||{};S.pubAt=(d&&d.at)||null;
 }
 function pickPubPid(){
   var want=periodIdFor(todayStr()),ids=Object.keys(S.pub).sort();
@@ -1189,13 +1337,13 @@ function pickPubPid(){
   var earlier=ids.filter(function(i){return i<=want});return earlier.length?earlier[earlier.length-1]:ids[0];
 }
 function publicHeaderHTML(){
-  var tabs=[['schedule','Schedule'],['table','Table'],['hours','Hours'],['mine','By lab technologist']];
+  var rt=S.sec==='routine',tabs=rt?[['st','Stations'],['person','By lab technologist']]:[['schedule','Schedule'],['table','Table'],['hours','Hours'],['mine','By lab technologist']];
   return '<header><div class="brandline"><span><b>Bench Rota</b> · clinical laboratory shifts</span><span class="store">'+(S.pubAt?'Updated '+esc(fmtShort(S.pubAt.slice(0,10))):'')+'</span></div>'+
-    '<div class="pnav"><button type="button" class="iconbtn" data-act="ppprev" aria-label="Previous period">'+ICON.prev+'</button>'+
+    secNavHTML()+(rt?monthNavHTML():'<div class="pnav"><button type="button" class="iconbtn" data-act="ppprev" aria-label="Previous period">'+ICON.prev+'</button>'+
     '<div class="plabel"><h1>'+esc(periodLabel(S.pid))+'</h1><div class="pmeta"><span>26th to 25th</span></div></div>'+
-    '<button type="button" class="iconbtn" data-act="ppnext" aria-label="Next period">'+ICON.next+'</button></div>'+
+    '<button type="button" class="iconbtn" data-act="ppnext" aria-label="Next period">'+ICON.next+'</button></div>')+
     '<nav class="tabs" role="tablist" aria-label="Sections">'+tabs.map(function(t){
-      return '<button type="button" role="tab" class="tab" data-act="ptab" data-tab="'+t[0]+'" aria-selected="'+(S.ptab===t[0])+'">'+t[1]+'</button>'}).join('')+'</nav></header>';
+      return '<button type="button" role="tab" class="tab" data-act="'+(rt?'prtab':'ptab')+'" data-tab="'+t[0]+'" aria-selected="'+((rt?S.prtab:S.ptab)===t[0])+'">'+t[1]+'</button>'}).join('')+'</nav></header>';
 }
 function publicScheduleHTML(){
   var p=cur();if(!p)return emptyPeriodHTML();
@@ -1228,7 +1376,7 @@ function publicMineHTML(){
     return '<div class="mrow"><div class="mdate"><b>'+esc(fmtLong(s.date))+'</b>'+(s.holidayName?'<span class="chip accent">'+esc(s.holidayName)+'</span>':'')+'</div><div class="mono">'+s.startClock+'–'+s.endClock+(s.overnight?' <span class="muted">+1 day</span>':'')+'</div><div class="muted">'+esc(s.label)+'</div><div class="mono mh">'+s.hours+'h</div></div>'}).join('')+'</div>';
 }
 function renderPublic(){
-  var y=window.scrollY,body=S.ptab==='table'?tableTabHTML():(S.ptab==='hours'?hoursHTML():(S.ptab==='mine'?publicMineHTML():publicScheduleHTML()));
+  var y=window.scrollY,body=S.sec==='routine'?(S.prtab==='person'?rotationPersonHTML():rotationStationsHTML()):S.ptab==='table'?tableTabHTML():(S.ptab==='hours'?hoursHTML():(S.ptab==='mine'?publicMineHTML():publicScheduleHTML()));
   document.getElementById('modal-root').innerHTML='';
   document.getElementById('app').innerHTML=publicHeaderHTML()+'<main>'+body+'</main><footer class="pubfoot"><button type="button" class="link" data-act="go-admin">Admin sign in</button></footer>';
   window.scrollTo(0,y);
@@ -1294,12 +1442,12 @@ function pickAdminPid(){
   return ids.length?ids[ids.length-1]:periodIdFor(addDays(todayStr(),10));
 }
 function afterUnlock(){
-  S.pid=pickAdminPid();S.hl='';S.draft=null;S.expanded={};
+  S.mkey=todayStr().slice(0,7);S.pid=pickAdminPid();S.hl='';S.draft=null;S.expanded={};
   S.tab=S.periods[S.pid]?'schedule':'setup';
   if(S.tab==='setup')initDraft();
 }
 function leaveAdmin(){
-  S.view='public';S.modal=null;S.hl='';S.pid=pickPubPid();
+  S.view='public';S.modal=null;S.hl='';S.pid=pickPubPid();S.mkey=pickPubMonth();
   try{sessionStorage.removeItem('benchrota:admin')}catch(e){}
   render();window.scrollTo(0,0);
 }
@@ -1335,6 +1483,13 @@ function buildSnapshot(){
   var snap={at:new Date().toISOString(),periods:{}};
   Object.keys(S.periods).forEach(function(id){var p=S.periods[id];
     snap.periods[id]={id:id,workers:p.workers.map(function(w){return {id:w.id,name:w.name,initials:w.initials||''}}),holidays:p.holidays||[],slots:p.slots}});
+  snap.rotation={};
+  var nm={};S.roster.workers.forEach(function(w){nm[w.id]=w.name});
+  Object.keys(S.rotation).forEach(function(mk){
+    var r=S.rotation[mk],as={};
+    Object.keys(r.assign||{}).forEach(function(wid){if(nm[wid])as[nm[wid]]=r.assign[wid]});
+    if(Object.keys(as).length)snap.rotation[mk]={id:mk,assign:as};
+  });
   return snap;
 }
 function publishPublic(){
@@ -1342,7 +1497,7 @@ function publishPublic(){
   toast('schedule.json downloaded. Upload it to the repository to update the public page.');
 }
 function backupAll(){
-  saveBlob('bench-rota-backup-'+todayStr()+'.json',JSON.stringify({kind:'bench-rota-backup',version:1,roster:S.roster,periods:S.periods},null,1),'application/json');
+  saveBlob('bench-rota-backup-'+todayStr()+'.json',JSON.stringify({kind:'bench-rota-backup',version:1,roster:S.roster,periods:S.periods,rotation:S.rotation},null,1),'application/json');
   toast('Backup downloaded. Keep it private: it includes restrictions.');
 }
 function restoreFrom(file){
@@ -1353,6 +1508,7 @@ function restoreFrom(file){
       if(d.kind!=='bench-rota-backup'||!d.periods)throw new Error('bad');
       if(d.roster&&d.roster.workers){S.roster={workers:d.roster.workers,lastAvailable:d.roster.lastAvailable||[]};saveRoster()}
       Object.keys(d.periods).forEach(function(id){var p=d.periods[id];if(p&&p.id){S.periods[p.id]=p;savePeriod(p)}});
+      Object.keys(d.rotation||{}).forEach(function(id){var r=d.rotation[id];if(r&&r.id){S.rotation[r.id]=r;saveRotation(r.id)}});
       afterUnlock();render();toast('Backup restored.');
     }catch(e){toast('That file is not a Bench Rota backup.')}
   };
@@ -1362,6 +1518,13 @@ function restoreFrom(file){
 /* ---------- events ---------- */
 var ACT={
   ptab:function(el){S.ptab=el.dataset.tab;render()},
+  prtab:function(el){S.prtab=el.dataset.tab;render()},
+  rtab:function(el){S.rtab=el.dataset.tab;render()},
+  sec:function(el){S.sec=el.dataset.sec;render();window.scrollTo(0,0)},
+  mprev:function(){S.mkey=addMonths(S.mkey,-1);render()},
+  mnext:function(){S.mkey=addMonths(S.mkey,1);render()},
+  rbuild:function(){rotationBuildAct()},
+  rclear:function(){rotationClear()},
   ppprev:function(){S.pid=shiftPeriodId(S.pid,-1);S.hl='';render();window.scrollTo(0,0)},
   ppnext:function(){S.pid=shiftPeriodId(S.pid,1);S.hl='';render();window.scrollTo(0,0)},
   'go-admin':function(){enterAdmin()},
@@ -1442,10 +1605,10 @@ var ACT={
   'close-modal':closeModal,
   assign:function(el){assign(el.dataset.id)},
   unassign:function(){var p=cur();delete p.slots[S.modal.key];savePeriod(p);closeModal();render()},
-  'new-worker':function(){S.modal={type:'worker',id:null,draft:{name:'',initials:'',no4:false,onlyShort:false,only12day:false,only12night:false,only16:false,daytimeOnly:false,maxHours:'',days:[0,1,2,3,4,5,6]}};renderModal()},
+  'new-worker':function(){S.modal={type:'worker',id:null,draft:{name:'',stations:AREAS.map(function(a){return a[0]}),initials:'',no4:false,onlyShort:false,only12day:false,only12night:false,only16:false,daytimeOnly:false,maxHours:'',days:[0,1,2,3,4,5,6]}};renderModal()},
   'edit-worker':function(el){
     var w=S.roster.workers.filter(function(x){return x.id===el.dataset.id})[0];if(!w)return;
-    S.modal={type:'worker',id:w.id,draft:{name:w.name,initials:w.initials||'',no4:!!w.no4,onlyShort:!!w.onlyShort,only12day:!!(w.only12day||w.only12),only12night:!!(w.only12night||w.only12),only16:!!w.only16,daytimeOnly:!!w.daytimeOnly,maxHours:w.maxHours>0?String(w.maxHours):'',days:w.days&&w.days.length?w.days.slice():[0,1,2,3,4,5,6]}};renderModal();
+    S.modal={type:'worker',id:w.id,draft:{name:w.name,stations:Array.isArray(w.stations)?w.stations.slice():AREAS.map(function(a){return a[0]}),initials:w.initials||'',no4:!!w.no4,onlyShort:!!w.onlyShort,only12day:!!(w.only12day||w.only12),only12night:!!(w.only12night||w.only12),only16:!!w.only16,daytimeOnly:!!w.daytimeOnly,maxHours:w.maxHours>0?String(w.maxHours):'',days:w.days&&w.days.length?w.days.slice():[0,1,2,3,4,5,6]}};renderModal();
   },
   'wk-day':function(el){
     var d=S.modal.draft,x=Number(el.dataset.d),i=d.days.indexOf(x);
@@ -1463,7 +1626,7 @@ var ACT={
     if(d.only16&&!d.only12day&&!d.only12night&&!d.onlyShort&&!d.days.some(function(x){return x>=1&&x<=5})){m.err='16-hour shifts only happen Monday to Friday, so choose at least one weekday.';renderModal();return}
     var mx=String(d.maxHours||'').trim();
     if(mx&&!/^\d{1,3}$/.test(mx)||mx&&Number(mx)<1){m.err='Enter a whole number of hours, or leave it blank for no limit.';renderModal();return}
-    var rec={id:m.id||uid(),name:name,initials:ini,no4:!!d.no4,onlyShort:!!d.onlyShort,only12day:!!d.only12day,only12night:!!d.only12night,only16:!!d.only16,daytimeOnly:!!d.daytimeOnly,maxHours:mx?Number(mx):null,days:d.days.length===7?null:d.days.slice()};
+    var rec={id:m.id||uid(),name:name,initials:ini,stations:(d.stations&&d.stations.length<AREAS.length)?d.stations.slice():null,no4:!!d.no4,onlyShort:!!d.onlyShort,only12day:!!d.only12day,only12night:!!d.only12night,only16:!!d.only16,daytimeOnly:!!d.daytimeOnly,maxHours:mx?Number(mx):null,days:d.days.length===7?null:d.days.slice()};
     if(m.id){S.roster.workers=S.roster.workers.map(function(w){return w.id===m.id?rec:w})}
     else{S.roster.workers.push(rec);if(S.draft)S.draft.avail.push(rec.id)}
     Object.keys(S.periods).forEach(function(pid){var pp=S.periods[pid],ch=false;(pp.workers||[]).forEach(function(w){if(w.id===rec.id&&(w.initials||'')!==ini){w.initials=ini;ch=true}});if(ch)savePeriod(pp)});
@@ -1513,7 +1676,7 @@ var ACT={
 document.addEventListener('click',function(e){
   if(e.target.classList&&e.target.classList.contains('backdrop')){closeModal();return}
   var el=e.target.closest('[data-act]');if(!el)return;
-  var a=el.dataset.act,okp={'export-pdf':1,ptab:1,ppprev:1,ppnext:1,'go-admin':1},okg={'retry-load':1,'gh-open':1,lock:1,login:1,'to-public':1,'request-open':1,'back-login':1,'have-code':1,'send-code':1,'verify-code':1,'save-pw':1,'cancel-pw':1,'save-token':1,'remove-token':1};
+  var a=el.dataset.act,okp={'export-pdf':1,sec:1,prtab:1,mprev:1,mnext:1,ptab:1,ppprev:1,ppnext:1,'go-admin':1},okg={'retry-load':1,'gh-open':1,lock:1,login:1,'to-public':1,'request-open':1,'back-login':1,'have-code':1,'send-code':1,'verify-code':1,'save-pw':1,'cancel-pw':1,'save-token':1,'remove-token':1};
   if(S.view==='public'&&!okp[a])return;
   if(S.view==='admin'&&S.gate!=='open'&&!okg[a])return;
   var f=ACT[a];if(f)f(el,e);
@@ -1528,6 +1691,13 @@ document.addEventListener('change',function(e){
   else if(b==='clear-pins'){S.clearPins=el.checked}
   else if(b==='hl'){S.hl=el.value;render()}
   else if(b==='who'){S.who=el.value;render()}
+  else if(b==='pwho'){S.pwho=el.value;render()}
+  else if(b==='w-st'){var d4=S.modal.draft,ar=el.dataset.area,ix=d4.stations.indexOf(ar);if(el.checked&&ix<0)d4.stations.push(ar);if(!el.checked&&ix>=0)d4.stations.splice(ix,1);S.modal.err=null}
+  else if(b==='rotcell'){
+    if(S.view!=='admin'||S.gate!=='open')return;
+    var rr=rotGet(S.mkey);rr.manual=rr.manual||{};if(el.value){rr.assign[el.dataset.wid]=el.value;rr.manual[el.dataset.wid]=1}else{delete rr.assign[el.dataset.wid];delete rr.manual[el.dataset.wid]}
+    saveRotation(S.mkey);render();
+  }
   else if(b==='restore-file'){if(el.files&&el.files[0])restoreFrom(el.files[0]);el.value=''}
   else if(b==='pin-toggle'){S.modal.pin=el.checked}
   else if(b==='w-short'){var dd=S.modal.draft;dd.onlyShort=el.checked;if(el.checked)dd.no4=false;S.modal.err=null;renderModal()}
@@ -1549,7 +1719,7 @@ document.addEventListener('keydown',function(e){
 
 /* ---------- start ---------- */
 async function boot(){
-  await loadSnap();S.pid=pickPubPid();render();
+  await loadSnap();S.pid=pickPubPid();S.mkey=pickPubMonth();render();
   var flag=false;try{flag=sessionStorage.getItem('benchrota:admin')==='1'}catch(e){}
   if(flag)enterAdmin();
 }
