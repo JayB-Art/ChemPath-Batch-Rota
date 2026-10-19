@@ -1,5 +1,5 @@
 <!doctype html>
-<html data-theme="dark" style="color-scheme: dark;"><head><meta charset="utf8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<html lang="en"><head><meta charset="utf8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>[hidden]{display:none!important}</style></head><body>
 <title>Bench Rota</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
@@ -8,10 +8,10 @@
 /* Layout: one working column. The header carries period navigation and four tabs (Schedule, Hours, Setup, Team).
    Schedule is a day-by-day ledger; each shift bar sits on a 24-hour lab day that starts at 08:30. */
 :root{
-  --bg:#EDF1EF; --surface:#FAFCFB; --ink:#13201E; --ink-2:#506360;
-  --line:#D2DBD8; --line-2:#E3EAE7;
-  --accent:#B8105C; --on-accent:#FFFFFF; --accent-soft:#F6DCE8;
-  --day:#4E9E92; --night:#233F52;
+  --bg:#EAF0F7; --surface:#F9FBFE; --ink:#0F1B2D; --ink-2:#4B5F7A;
+  --line:#CCD7E6; --line-2:#E0E8F2;
+  --accent:#1F5FBF; --on-accent:#FFFFFF; --accent-soft:#DCE8F8;
+  --day:#5B9BE0; --night:#1D3557;
   --ok:#1B7A4E; --warn:#B3261E; --warn-soft:#F8DEDB;
   --wl:42%;
   --font-ui:'Schibsted Grotesk',system-ui,-apple-system,'Segoe UI',sans-serif;
@@ -19,19 +19,19 @@
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --bg:#0E1715; --surface:#16211F; --ink:#E5EEEB; --ink-2:#9BAFAA;
-    --line:#2B3C39; --line-2:#22312E;
-    --accent:#FF74AE; --on-accent:#2A0A1A; --accent-soft:#3A1828;
-    --day:#5BB5A8; --night:#7FA6C2;
+    --bg:#0B1422; --surface:#121E31; --ink:#E6EEF9; --ink-2:#9DB1CC;
+    --line:#263A55; --line-2:#1D2E46;
+    --accent:#6FA8FF; --on-accent:#06152E; --accent-soft:#14284A;
+    --day:#5CA0E6; --night:#A7BEDB;
     --ok:#5ED59C; --warn:#FF8A80; --warn-soft:#3A1E1C;
     --wl:64%; color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
-  --bg:#0E1715; --surface:#16211F; --ink:#E5EEEB; --ink-2:#9BAFAA;
-  --line:#2B3C39; --line-2:#22312E;
-  --accent:#FF74AE; --on-accent:#2A0A1A; --accent-soft:#3A1828;
-  --day:#5BB5A8; --night:#7FA6C2;
+  --bg:#0B1422; --surface:#121E31; --ink:#E6EEF9; --ink-2:#9DB1CC;
+  --line:#263A55; --line-2:#1D2E46;
+  --accent:#6FA8FF; --on-accent:#06152E; --accent-soft:#14284A;
+  --day:#5CA0E6; --night:#A7BEDB;
   --ok:#5ED59C; --warn:#FF8A80; --warn-soft:#3A1E1C;
   --wl:64%; color-scheme:dark;
 }
@@ -208,7 +208,7 @@ input[type=checkbox]{width:1.15rem;height:1.15rem;accent-color:var(--accent);fle
 .ptable{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
 .ptable th,.ptable td{padding:.55rem .8rem;text-align:left;border-top:1px solid var(--line-2);white-space:nowrap}
 .ptable thead th{border-top:0;font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2);background:var(--bg)}
-.ptable tr.alt td{background:color-mix(in srgb,var(--ink) 4%,transparent)}
+.ptable tr.alt td{background:color-mix(in srgb,var(--accent) 7%,transparent)}
 .tblwrap{overflow-x:auto;max-width:100%}
 .hol{display:inline-block;margin-left:.55rem;padding:.08rem .55rem;border-radius:99px;font-size:.72rem;font-weight:700;letter-spacing:.02em;background:var(--accent-soft);color:var(--accent);vertical-align:middle}
 .ptable td.num,.ptable th.num{text-align:right}
@@ -1004,14 +1004,14 @@ function tablePdfPages(p){
   for(var pg=0;pg<n;pg++){
     var c='',top=738;
     c+=txt(L,800,16,true,'Bench Rota')+txt(L,782,10,false,periodLabel(p.id)+(n>1?'  (page '+(pg+1)+' of '+n+')':''),0.35);
-    c+=rect(L,top,515,22,0.92,0.94,0.93);
+    c+=rect(L,top,515,22,0.88,0.92,0.98);
     c+=txt(L+8,top+7,9,true,'DATE')+txt(160,top+7,9,true,'DAY')+txt(330,top+7,9,true,'SCHEDULED');
     rows.slice(pg*perPage,(pg+1)*perPage).forEach(function(r,i){
       var yT=top-i*rh,yB=yT-rh;
-      if(r.alt)c+=rect(L,yB,515,rh,0.965,0.97,0.968);
+      if(r.alt)c+=rect(L,yB,515,rh,0.95,0.965,0.985);
       c+=line(L,yB,555,yB);
       c+=txt(L+8,yB+7,10,false,r.date)+txt(160,yB+7,10,false,r.day)+txt(330,yB+7,10,false,r.txt);
-      if(r.holiday){c+=rect(236,yB+4,40,13,0.99,0.88,0.78)+txt(240,yB+7.5,8,true,'Holiday',0.45)}
+      if(r.holiday){c+=rect(236,yB+4,40,13,0.80,0.88,0.98)+txt(240,yB+7.5,8,true,'Holiday',0.2)}
     });
     if(pg===n-1){var yK=top-Math.min(rows.length,perPage)*rh-22;TABLE_KEY.forEach(function(k,i){c+=txt(L,yK-i*11,8,false,k,0.35)})}
     pages.push(c);
@@ -1147,7 +1147,7 @@ function makeXlsx(sheets){
     {name:'_rels/.rels',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'},
     {name:'xl/workbook.xml',data:wb+'</sheets></workbook>'},
     {name:'xl/_rels/workbook.xml.rels',data:rel},
-    {name:'xl/styles.xml',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet '+NS+'><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDDE8E4"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'});
+    {name:'xl/styles.xml',data:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet '+NS+'><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDCE8F8"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>'});
   return zipStore(files);
 }
 function exportStatsXlsx(){
