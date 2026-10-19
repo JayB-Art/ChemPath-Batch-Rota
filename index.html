@@ -426,10 +426,11 @@ function searchSchedule(slots,workers,lockedMap,lv,restarts,shortIters,longIters
   var unf=0;for(var z=0;z<m;z++)if(best.assign[z]<0)unf++;
   return {assign:best.assign,unfilled:unf};
 }
-function computeCarry(period){
-  var ids=Object.keys(S.periods).filter(function(id){return id<period.id}).sort().slice(-12),c={};
+function computeCarry(period,all){
+  all=all||{};
+  var ids=Object.keys(all).filter(function(id){return id<period.id}).sort().slice(-12),c={};
   ids.forEach(function(id){
-    var p=S.periods[id];if(!p||!p.slots||!p.workers||!p.workers.length)return;
+    var p=all[id];if(!p||!p.slots||!p.workers||!p.workers.length)return;
     var hrs={},wk={},tot=0,totW=0,any=false;
     buildSlots(p).forEach(function(s){
       var e=p.slots[s.key];if(!e||!e.w)return;
@@ -447,7 +448,7 @@ function generateSchedule(period,opts){
   opts=opts||{};
   var slots=buildSlots(period),workers=period.workers,locked={},k;
   for(k in period.slots){var e=period.slots[k];if(e&&e.w&&(opts.lockAll||e.l))locked[k]=e.w}
-  var best=null,names=['strict','relaxed'],carry=computeCarry(period);
+  var best=null,names=['strict','relaxed'],carry=computeCarry(period,opts.periods);
   for(var q=0;q<names.length;q++){
     var r=searchSchedule(slots,workers,locked,LEVELS[names[q]],18,500,18000,carry);
     r.level=names[q];
@@ -892,7 +893,7 @@ function buildPeriod(){
     ['A','B','C'].forEach(function(id,k){if(x.pins[k]&&workers.some(function(w){return w.id===x.pins[k]}))p.slots[x.date+'|'+id]={w:x.pins[k],l:1}});
   });
   var prevSlots=old?clone(old.slots):null;
-  var res=generateSchedule(p);
+  var res=generateSchedule(p,{periods:S.periods});
   p.slots=res.slots;p.unfilled=res.unfilled;p.relaxed=res.relaxed;p.builtAt=new Date().toISOString();
   S.undo=prevSlots?{pid:pid,slots:prevSlots,workers:clone(old.workers),holidays:clone(old.holidays)}:null;
   S.periods[pid]=p;S.roster.lastAvailable=d.avail.slice();S.clearPins=false;
@@ -903,7 +904,7 @@ function buildPeriod(){
 function rerun(lockAll){
   var p=cur();if(!p)return;
   S.undo={pid:p.id,slots:clone(p.slots),workers:clone(p.workers),holidays:clone(p.holidays)};
-  var res=generateSchedule(p,{lockAll:lockAll});
+  var res=generateSchedule(p,{lockAll:lockAll,periods:S.periods});
   p.slots=res.slots;p.unfilled=res.unfilled;p.relaxed=res.relaxed;
   savePeriod(p);render();
   toast(res.unfilled?res.unfilled+' shift'+(res.unfilled===1?'':'s')+' still unfilled.':(lockAll?'Empty shifts filled.':'Unpinned shifts rebuilt.'),'Undo',doUndo);
