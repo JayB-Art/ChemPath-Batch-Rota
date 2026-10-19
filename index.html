@@ -833,6 +833,7 @@ function workerModalHTML(){
   var m=S.modal,d=m.draft,order=[1,2,3,4,5,6,0];
   var h='<div><h2>'+(m.id?'Edit lab technologist':'Add a lab technologist')+'</h2></div>';
   h+='<div class="field"><label for="wname">Name</label><input type="text" id="wname" data-bind="wname" value="'+esc(d.name)+'" autocomplete="off" data-autofocus></div>';
+  h+='<div class="field"><label for="winit">Preferred initials</label><input type="text" id="winit" data-bind="winit" maxlength="5" value="'+esc(d.initials||'')+'" autocomplete="off" placeholder="Auto from name if blank" style="text-transform:uppercase"><span class="note">Shown in the Table tab and its PDF, for example AL.</span></div>';
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-short"'+(d.onlyShort?' checked':'')+'>Only 4-hour shifts</label>';
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-no4"'+(d.no4?' checked':'')+'>Opt out of 4-hour shifts</label>';
   h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="w-12d"'+(d.only12day?' checked':'')+'>Only 12-hour day shifts (8:30 AM to 8:30 PM, weekends and holidays)</label>';
@@ -882,7 +883,7 @@ function setTab(t){
 function buildPeriod(){
   var d=S.draft,old=cur(),pid=S.pid;
   var workers=S.roster.workers.filter(function(w){return d.avail.indexOf(w.id)>=0}).map(function(w){
-    return {id:w.id,name:w.name,no4:!!w.no4,onlyShort:!!w.onlyShort,only12day:!!(w.only12day||w.only12),only12night:!!(w.only12night||w.only12),only16:!!w.only16,days:w.days&&w.days.length&&w.days.length<7?w.days.slice():null,daytimeOnly:!!w.daytimeOnly,maxHours:w.maxHours>0?w.maxHours:null,daysOff:(d.daysOff[w.id]||[]).slice().sort()};
+    return {id:w.id,name:w.name,initials:w.initials||'',no4:!!w.no4,onlyShort:!!w.onlyShort,only12day:!!(w.only12day||w.only12),only12night:!!(w.only12night||w.only12),only16:!!w.only16,days:w.days&&w.days.length&&w.days.length<7?w.days.slice():null,daytimeOnly:!!w.daytimeOnly,maxHours:w.maxHours>0?w.maxHours:null,daysOff:(d.daysOff[w.id]||[]).slice().sort()};
   });
   if(!workers.length){toast('Tick at least one available person first.');return}
   var p={id:pid,start:periodStart(pid),end:periodEnd(pid),workers:workers,
@@ -953,7 +954,7 @@ var DOWF=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'
 function nameParts(n){var w=String(n||'').trim().split(/\s+/).filter(Boolean);return w.length?{ini:w.map(function(x){return x.charAt(0).toUpperCase()}).join(''),last:w[w.length-1]}:null}
 function tableRows(p){
   var hset=holidaySet(p),byId={};p.workers.forEach(function(w){byId[w.id]=w});
-  function who(d,id){var e=p.slots[d+'|'+id],w=e&&e.w?byId[e.w]:null;return w?nameParts(w.name):null}
+  function who(d,id){var e=p.slots[d+'|'+id],w=e&&e.w?byId[e.w]:null;var n=w?nameParts(w.name):null;if(n&&w.initials)n.ini=w.initials;return n}
   function ini(d,id){var n=who(d,id);return '('+(n?n.ini:'—')+')'}
   function ln(d,id){var n=who(d,id);return n?n.last:'—'}
   return periodDates(p.id).map(function(d){
@@ -1333,7 +1334,7 @@ async function unlock(){
 function buildSnapshot(){
   var snap={at:new Date().toISOString(),periods:{}};
   Object.keys(S.periods).forEach(function(id){var p=S.periods[id];
-    snap.periods[id]={id:id,workers:p.workers.map(function(w){return {id:w.id,name:w.name}}),holidays:p.holidays||[],slots:p.slots}});
+    snap.periods[id]={id:id,workers:p.workers.map(function(w){return {id:w.id,name:w.name,initials:w.initials||''}}),holidays:p.holidays||[],slots:p.slots}});
   return snap;
 }
 function publishPublic(){
@@ -1441,10 +1442,10 @@ var ACT={
   'close-modal':closeModal,
   assign:function(el){assign(el.dataset.id)},
   unassign:function(){var p=cur();delete p.slots[S.modal.key];savePeriod(p);closeModal();render()},
-  'new-worker':function(){S.modal={type:'worker',id:null,draft:{name:'',no4:false,onlyShort:false,only12day:false,only12night:false,only16:false,daytimeOnly:false,maxHours:'',days:[0,1,2,3,4,5,6]}};renderModal()},
+  'new-worker':function(){S.modal={type:'worker',id:null,draft:{name:'',initials:'',no4:false,onlyShort:false,only12day:false,only12night:false,only16:false,daytimeOnly:false,maxHours:'',days:[0,1,2,3,4,5,6]}};renderModal()},
   'edit-worker':function(el){
     var w=S.roster.workers.filter(function(x){return x.id===el.dataset.id})[0];if(!w)return;
-    S.modal={type:'worker',id:w.id,draft:{name:w.name,no4:!!w.no4,onlyShort:!!w.onlyShort,only12day:!!(w.only12day||w.only12),only12night:!!(w.only12night||w.only12),only16:!!w.only16,daytimeOnly:!!w.daytimeOnly,maxHours:w.maxHours>0?String(w.maxHours):'',days:w.days&&w.days.length?w.days.slice():[0,1,2,3,4,5,6]}};renderModal();
+    S.modal={type:'worker',id:w.id,draft:{name:w.name,initials:w.initials||'',no4:!!w.no4,onlyShort:!!w.onlyShort,only12day:!!(w.only12day||w.only12),only12night:!!(w.only12night||w.only12),only16:!!w.only16,daytimeOnly:!!w.daytimeOnly,maxHours:w.maxHours>0?String(w.maxHours):'',days:w.days&&w.days.length?w.days.slice():[0,1,2,3,4,5,6]}};renderModal();
   },
   'wk-day':function(el){
     var d=S.modal.draft,x=Number(el.dataset.d),i=d.days.indexOf(x);
@@ -1454,14 +1455,18 @@ var ACT={
   'save-worker':function(){
     var m=S.modal,d=m.draft,name=d.name.trim();
     if(!name){m.err='Enter a name.';renderModal();return}
+    var ini=String(d.initials||'').toUpperCase().replace(/[^A-Z]/g,'').slice(0,5);
+    var clash=ini?S.roster.workers.filter(function(w){var np=nameParts(w.name);return w.id!==m.id&&(w.initials||(np&&np.ini))===ini})[0]:null;
+    if(clash){m.err='Those initials are already used by '+clash.name+'.';renderModal();return}
     if(!d.days.length){m.err='Choose at least one day this person can work.';renderModal();return}
     if(d.daytimeOnly&&(d.only12night||d.only16)&&!d.only12day&&!d.onlyShort){m.err='12-hour night and 16-hour shifts run overnight, so they cannot be combined with daytime only unless 4-hour or 12-hour day shifts are also ticked.';renderModal();return}
     if(d.only16&&!d.only12day&&!d.only12night&&!d.onlyShort&&!d.days.some(function(x){return x>=1&&x<=5})){m.err='16-hour shifts only happen Monday to Friday, so choose at least one weekday.';renderModal();return}
     var mx=String(d.maxHours||'').trim();
     if(mx&&!/^\d{1,3}$/.test(mx)||mx&&Number(mx)<1){m.err='Enter a whole number of hours, or leave it blank for no limit.';renderModal();return}
-    var rec={id:m.id||uid(),name:name,no4:!!d.no4,onlyShort:!!d.onlyShort,only12day:!!d.only12day,only12night:!!d.only12night,only16:!!d.only16,daytimeOnly:!!d.daytimeOnly,maxHours:mx?Number(mx):null,days:d.days.length===7?null:d.days.slice()};
+    var rec={id:m.id||uid(),name:name,initials:ini,no4:!!d.no4,onlyShort:!!d.onlyShort,only12day:!!d.only12day,only12night:!!d.only12night,only16:!!d.only16,daytimeOnly:!!d.daytimeOnly,maxHours:mx?Number(mx):null,days:d.days.length===7?null:d.days.slice()};
     if(m.id){S.roster.workers=S.roster.workers.map(function(w){return w.id===m.id?rec:w})}
     else{S.roster.workers.push(rec);if(S.draft)S.draft.avail.push(rec.id)}
+    Object.keys(S.periods).forEach(function(pid){var pp=S.periods[pid],ch=false;(pp.workers||[]).forEach(function(w){if(w.id===rec.id&&(w.initials||'')!==ini){w.initials=ini;ch=true}});if(ch)savePeriod(pp)});
     saveRoster();S.modal=null;render();
   },
   'ask-delete':function(){S.modal.confirm=true;renderModal()},
@@ -1533,6 +1538,7 @@ document.addEventListener('change',function(e){
 document.addEventListener('input',function(e){
   var el=e.target;if(!el.dataset)return;
   if(el.dataset.bind==='wname'){S.modal.draft.name=el.value;S.modal.err=null}
+  if(el.dataset.bind==='winit'){S.modal.draft.initials=el.value.toUpperCase().replace(/[^A-Z]/g,'');S.modal.err=null}
   else if(el.dataset.bind==='wmax'){S.modal.draft.maxHours=el.value;S.modal.err=null}
 });
 document.addEventListener('keydown',function(e){
