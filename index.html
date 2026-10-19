@@ -658,7 +658,7 @@ function closeModal(){S.modal=null;renderModal()}
 function headerHTML(){
   var p=cur(),status=!S.ready?'':(p?'<span class="status built">Schedule built</span>':'<span class="status todo">Needs setup</span>');
   var store=S.remote?'Saved to GitHub (private data repository)':S.mode==='db'?'Saved with this page':(S.mode==='local'?'Saved in this browser only':'Loading…');
-  var rt=S.sec==='routine',tabs=rt?[['rot','Rotation'],['hist','History']]:[['schedule','Schedule'],['table','Table'],['hours','Hours'],['stats','Statistics'],['setup','Setup'],['team','Team']];
+  var rt=S.sec==='routine',tabs=rt?[['rot','Rotation'],['hist','History'],['team','Team']]:[['schedule','Schedule'],['table','Table'],['hours','Hours'],['stats','Statistics'],['setup','Setup'],['team','Team']];
   if(rt)status='';
   return '<header>'+
     '<div class="brandline"><span><b>Bench Rota</b> · admin</span><span class="store">'+store+(S.me?' · Signed in as '+esc(meName()):'')+'</span><span class="row" style="gap:.4rem;letter-spacing:0;text-transform:none"><button type="button" class="btn small primary" data-act="publish">Publish schedule</button><button type="button" class="btn small" data-act="download-json">Download file</button><button type="button" class="btn small" data-act="backup">Backup</button><button type="button" class="btn small" data-act="restore">Restore</button><input type="file" id="restore-file" data-bind="restore-file" accept=".json,application/json" hidden><button type="button" class="btn small" data-act="change-pw-open">Password</button><button type="button" class="btn small" data-act="gh-open">Publishing setup</button><button type="button" class="btn small" data-act="lock">Sign out</button></span></div>'+
@@ -787,10 +787,10 @@ function setupHTML(){
   return h+'</div></section>';
 }
 function teamHTML(){
-  var h='<div class="toolbar"><span class="note">Everyone saved here is offered at the start of each period. Restrictions apply whenever the person is available.</span><button type="button" class="btn primary" data-act="new-worker">Add a lab technologist</button></div>';
+  var h='<div class="toolbar"><span class="note">'+(S.sec==='routine'?'The same team is used for Emergency Duty and Routine. Tick the stations each person may rotate on when you add or edit them.':'Everyone saved here is offered at the start of each period. Restrictions apply whenever the person is available.')+'</span><button type="button" class="btn primary" data-act="new-worker">Add a lab technologist</button></div>';
   if(!S.roster.workers.length)return h+'<div class="empty-state"><h2>No one saved yet</h2><p>Add each lab technologist once. Mark anyone who can only work 4-hour shifts, only certain weekdays, or only between 8:30am and 8:30pm.</p><button type="button" class="btn" data-act="load-example">Load an example team of 9</button></div>';
   h+='<section class="step"><div class="wlist">'+S.roster.workers.map(function(w){
-    return '<div class="wrow"><div class="wmain"><i class="dot" style="--wh:'+hueR(w.id)+'"></i><b>'+esc(w.name)+'</b>'+(chipsFor(w).length?chipsFor(w).map(function(c){return '<span class="chip accent">'+esc(c)+'</span>'}).join(''):'<span class="muted" style="font-size:.85rem">No restrictions</span>')+'</div><div class="wacts"><button type="button" class="link" data-act="edit-worker" data-id="'+esc(w.id)+'">Edit</button></div></div>'}).join('')+'</div></section>';
+    return '<div class="wrow"><div class="wmain"><i class="dot" style="--wh:'+hueR(w.id)+'"></i><b>'+esc(w.name)+'</b>'+(S.sec==='routine'?stationChips(w):chipsFor(w).length?chipsFor(w).map(function(c){return '<span class="chip accent">'+esc(c)+'</span>'}).join(''):'<span class="muted" style="font-size:.85rem">No restrictions</span>')+'</div><div class="wacts"><button type="button" class="link" data-act="edit-worker" data-id="'+esc(w.id)+'">Edit</button></div></div>'}).join('')+'</div></section>';
   return h;
 }
 function render(){
@@ -799,7 +799,7 @@ function render(){
   if(S.view==='public'){renderPublic();return}
   if(S.gate!=='open'){renderGate();return}
   if(!S.ready)body='<div class="empty-state"><h2>Loading your saved rota…</h2><p>Your team and past schedules appear here in a moment.</p></div>';
-  else if(S.sec==='routine')body=S.rtab==='hist'?rotationHistoryHTML():rotationHTML();
+  else if(S.sec==='routine')body=S.rtab==='team'?teamHTML():S.rtab==='hist'?rotationHistoryHTML():rotationHTML();
   else if(S.tab==='schedule')body=scheduleHTML();
   else if(S.tab==='table')body=tableTabHTML();
   else if(S.tab==='stats')body=statsHTML();
@@ -1197,11 +1197,17 @@ function allowedAreas(w){return Array.isArray(w.stations)?w.stations:AREAS.map(f
 function saveRotation(k){return persist('rotation/'+k,S.rotation[k])}
 function rotGet(k){return S.rotation[k]||(S.rotation[k]={id:k,assign:{}})}
 function byName(a,b){return a.name.localeCompare(b.name)}
+function stationChips(w){
+  var al=allowedAreas(w);
+  if(!al.length)return '<span class="chip accent">Not in Routine rotation</span>';
+  if(al.length===AREAS.length)return '<span class="muted" style="font-size:.85rem">All stations</span>';
+  return '<span class="chip accent">'+al.length+' of '+AREAS.length+' stations: '+esc(al.map(areaShort).join(', '))+'</span>';
+}
 /* Build one month. Rules: exactly 2 people on Reception; nobody repeats last month's station (unless set by hand);
    only allowed stations; every other station covered where possible; loads kept even. Hand-set choices are kept. */
 function rotationBuild(k){
   var r=rotGet(k),man=r.manual||{},prevA=(S.rotation[addMonths(k,-1)]||{}).assign||{};
-  var ws=S.roster.workers.filter(function(w){return allowedAreas(w).length}),fixed={},free=[],skipped=[],since={};
+  var away=r.away||{},ws=S.roster.workers.filter(function(w){return allowedAreas(w).length&&!away[w.id]}),fixed={},free=[],skipped=[],since={};
   ws.forEach(function(w){since[w.id]={}});
   Object.keys(S.rotation).filter(function(m){return m<k}).sort().forEach(function(m){
     var gap=monthIdx(k)-monthIdx(m),a=S.rotation[m].assign||{};
@@ -1265,21 +1271,21 @@ function stationSummary(byArea){
 function rotationHTML(){
   var k=S.mkey,r=S.rotation[k]||{assign:{}},prev=S.rotation[addMonths(k,-1)],pa=(prev&&prev.assign)||{};
   var ws=S.roster.workers.slice().sort(byName);
-  if(!ws.length)return '<div class="empty-state"><h2>Your team is empty</h2><p>Add lab technologists in the Team tab under Emergency Duty first.</p></div>';
+  if(!ws.length)return '<div class="empty-state"><h2>Your team is empty</h2><p>Add lab technologists in the Team tab first.</p></div>';
   var inR=ws.filter(function(w){return allowedAreas(w).length}),out=ws.filter(function(w){return !allowedAreas(w).length});
   var rows=inR.map(function(w){
-    var cur=r.assign[w.id]||'',al=allowedAreas(w),same=cur&&pa[w.id]===cur,man=r.manual&&r.manual[w.id];
-    return '<tr><td>'+esc(w.name)+'</td><td><select class="rsel" data-bind="rotcell" data-wid="'+esc(w.id)+'"><option value="">—</option>'+
-      AREAS.filter(function(a){return al.indexOf(a[0])>=0}).map(function(a){return '<option value="'+a[0]+'"'+(cur===a[0]?' selected':'')+'>'+esc(a[1])+'</option>'}).join('')+'</select>'+(man?' <span class="chip">manual</span>':(cur?'':' <span class="chip warn">Needs a station</span>'))+'</td>'+
+    var gone=r.away&&r.away[w.id],cur=gone?'':(r.assign[w.id]||''),al=allowedAreas(w),same=cur&&pa[w.id]===cur,man=r.manual&&r.manual[w.id];
+    return '<tr'+(gone?' style="opacity:.6"':'')+'><td><label class="chk" style="font-weight:600"><input type="checkbox" data-bind="ravail" data-wid="'+esc(w.id)+'"'+(gone?'':' checked')+' aria-label="Available">'+esc(w.name)+'</label></td><td>'+(gone?'<span class="muted">Not available this month</span>':'<select class="rsel" data-bind="rotcell" data-wid="'+esc(w.id)+'"><option value="">—</option>'+
+      AREAS.filter(function(a){return al.indexOf(a[0])>=0}).map(function(a){return '<option value="'+a[0]+'"'+(cur===a[0]?' selected':'')+'>'+esc(a[1])+'</option>'}).join('')+'</select>'+(man?' <span class="chip">manual</span>':(cur?'':' <span class="chip warn">Needs a station</span>')))+'</td>'+
       '<td>'+esc(pa[w.id]?areaName(pa[w.id]):'—')+(same?(man?' <span class="chip">Same as last month (manual)</span>':' <span class="chip warn">Same as last month</span>'):'')+'</td><td class="muted">'+(al.length===AREAS.length?'All stations':al.length+' of '+AREAS.length+' stations')+'</td></tr>';
   }).join('');
   var byArea={};Object.keys(r.assign).forEach(function(wid){var w=ws.filter(function(x){return x.id===wid})[0];if(w&&r.assign[wid])(byArea[r.assign[wid]]=byArea[r.assign[wid]]||[]).push(w.name)});
   var recN=(byArea.rec||[]).length;
-  return '<div class="toolbar"><span class="note">Each lab technologist works one station for the whole calendar month. <span class="chip'+(recN===2?'':' warn')+'">Reception '+recN+' of 2</span></span><span class="row"><button type="button" class="btn small primary" data-act="rbuild">Build rotation</button><button type="button" class="btn small danger" data-act="rclear">Clear month</button></span></div>'+
-    '<div class="tblwrap"><table class="ptable"><thead><tr><th>Lab technologist</th><th>Station for '+esc(monthLabel(k))+'</th><th>Last month</th><th>Allowed</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+  return '<div class="toolbar"><span class="note">Each lab technologist works one station for the whole calendar month. <span class="chip'+(recN===2?'':' warn')+'">Reception '+recN+' of 2</span></span><span class="row">'+(Object.keys(r.away||{}).length?'<button type="button" class="btn small" data-act="ravall">Everyone available</button>':'')+'<button type="button" class="btn small primary" data-act="rbuild">Build rotation</button><button type="button" class="btn small danger" data-act="rclear">Clear month</button></span></div>'+
+    '<div class="tblwrap"><table class="ptable"><thead><tr><th>Available · Lab technologist</th><th>Station for '+esc(monthLabel(k))+'</th><th>Last month</th><th>Allowed</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     (out.length?'<p class="note" style="margin-top:.8rem">Not in the rotation (no stations allowed): '+esc(out.map(function(w){return w.name}).join(', '))+'.</p>':'')+
     '<h3 class="wk">By station</h3>'+stationSummary(byArea)+
-    '<p class="note" style="margin-top:.8rem">Build rotation puts exactly 2 people on Reception, never repeats a person’s station from last month, keeps every other station covered where it can, and only uses allowed stations. Anything you choose by hand is kept when you rebuild and may repeat last month’s station. Use Clear month to start over. Click <b>Publish schedule</b> to show it on the public page.</p>';
+    '<p class="note" style="margin-top:.8rem">Untick anyone who is not available this month; they are left out of the build. Build rotation puts exactly 2 people on Reception, never repeats a person’s station from last month, keeps every other station covered where it can, and only uses allowed stations. Anything you choose by hand is kept when you rebuild and may repeat last month’s station. Use Clear month to start over. Click <b>Publish schedule</b> to show it on the public page.</p>';
 }
 function rotationHistoryHTML(){
   var k=S.mkey,months=[];for(var i=5;i>=0;i--)months.push(addMonths(k,-i));
@@ -1524,6 +1530,7 @@ var ACT={
   mprev:function(){S.mkey=addMonths(S.mkey,-1);render()},
   mnext:function(){S.mkey=addMonths(S.mkey,1);render()},
   rbuild:function(){rotationBuildAct()},
+  ravall:function(){var r=rotGet(S.mkey);r.away={};saveRotation(S.mkey);render()},
   rclear:function(){rotationClear()},
   ppprev:function(){S.pid=shiftPeriodId(S.pid,-1);S.hl='';render();window.scrollTo(0,0)},
   ppnext:function(){S.pid=shiftPeriodId(S.pid,1);S.hl='';render();window.scrollTo(0,0)},
@@ -1693,6 +1700,12 @@ document.addEventListener('change',function(e){
   else if(b==='who'){S.who=el.value;render()}
   else if(b==='pwho'){S.pwho=el.value;render()}
   else if(b==='w-st'){var d4=S.modal.draft,ar=el.dataset.area,ix=d4.stations.indexOf(ar);if(el.checked&&ix<0)d4.stations.push(ar);if(!el.checked&&ix>=0)d4.stations.splice(ix,1);S.modal.err=null}
+  else if(b==='ravail'){
+    if(S.view!=='admin'||S.gate!=='open')return;
+    var ra=rotGet(S.mkey),wid=el.dataset.wid;ra.away=ra.away||{};
+    if(el.checked)delete ra.away[wid];else{ra.away[wid]=1;delete ra.assign[wid];if(ra.manual)delete ra.manual[wid]}
+    saveRotation(S.mkey);render();
+  }
   else if(b==='rotcell'){
     if(S.view!=='admin'||S.gate!=='open')return;
     var rr=rotGet(S.mkey);rr.manual=rr.manual||{};if(el.value){rr.assign[el.dataset.wid]=el.value;rr.manual[el.dataset.wid]=1}else{delete rr.assign[el.dataset.wid];delete rr.manual[el.dataset.wid]}
