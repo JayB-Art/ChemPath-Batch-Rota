@@ -319,6 +319,8 @@ function pairReason(a,b,lv){
   var f=a,s=b;if(b.startMin<a.startMin){f=b;s=a}
   var gap=s.startMin-f.endMin;
   if(gap<0)return 'Overlaps another shift';
+  if(f.dn===s.dn)return 'Already works that day';
+  if(f.overnight&&s.dn===f.dn+1)return 'Cannot work the day after an overnight shift';
   var need=(f.hours>=12?lv.long:lv.short)*60;
   if(gap<need)return 'Under '+(need/60)+'h rest between shifts';
   return null;
@@ -772,7 +774,7 @@ function setupHTML(){
   periodDates(S.pid).forEach(function(dt){var t=dayType(dt,hset);cnt[t]++;TEMPLATES[t].forEach(function(s){hrs+=s.h})});
   h+='<section class="step"><h2><span class="stepn">Step 3</span>Build the schedule</h2>'+
     '<div class="summary"><span><b>'+avail.length+'</b> people available</span><span><b>'+cnt.weekday+'</b> weekdays · <b>'+cnt.weekend+'</b> weekend days · <b>'+cnt.holiday+'</b> holidays</span><span><b>'+hrs+'h</b> to cover</span><span><b>'+(avail.length?fh(hrs/avail.length):'0')+'h</b> each if split evenly</span></div>';
-  if(avail.length&&avail.length<5)h+='<p class="note" style="margin-bottom:.8rem">Weekends need 4 people a day, so with fewer than 5 available some shifts may go unfilled or break rest rules.</p>';
+  if(avail.length&&avail.length<5)h+='<p class="note" style="margin-bottom:.8rem">Weekends need 4 people a day, so with fewer than 5 available some shifts may go unfilled. No one works twice in a day or the day after an overnight shift, and those two rules are never relaxed.</p>';
   h+='<div class="row"><button type="button" class="btn primary" data-act="build"'+(avail.length?'':' disabled')+'>'+(p?'Rebuild schedule':'Build schedule')+'</button>';
   if(p)h+='<label class="chk" style="font-weight:500"><input type="checkbox" data-bind="clear-pins"'+(S.clearPins?' checked':'')+'>Also clear pinned shifts</label>';
   return h+'</div></section>';
