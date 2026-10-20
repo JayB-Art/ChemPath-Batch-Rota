@@ -521,7 +521,7 @@ function workerReasons(period,slots,worker,slot){
 'use strict';
 var S={ready:false,mode:'loading',roster:{workers:[],lastAvailable:[]},periods:{},pid:null,tab:'schedule',draft:null,
   modal:null,hl:'',undo:null,expanded:{},clearPins:false,
-  view:'public',pub:{},pubAt:null,ptab:'schedule',who:'',gate:'loading',gateErr:null,auth:null,unlocked:false,backendReady:false,connected:false,remote:false,dataReady:false,sec:'emergency',rotation:{},pubRotation:{},rtab:'rot',prtab:'st',mkey:null,pwho:'',me:null,admins:[],pending:null,gateInfo:null};
+  view:'public',pub:{},pubAt:null,ptab:'schedule',who:'',gate:'loading',gateErr:null,auth:null,unlocked:false,backendReady:false,connected:false,remote:false,dataReady:false,sec:'emergency',rotation:{},pubRotation:{},rtab:'rot',mkey:null,me:null,admins:[],pending:null,gateInfo:null};
 /* ===== SETTINGS: fill these in before use (see README) ===== */
 var CONFIG={
   approverEmail:'jabarigbrown@gmail.com',                 // the one address that receives approval codes
@@ -1382,16 +1382,6 @@ function rotationStationsHTML(){
   if(!r)return '<div class="empty-state"><h2>No rotation published for '+esc(monthLabel(S.mkey))+' yet</h2><p>Please check back once it has been published.</p></div>';
   return '<div class="tbltools"><button type="button" class="btn small primary" data-act="export-routine-pdf">Export PDF</button></div>'+stationTableHTML(stationEntries());
 }
-function rotationPersonHTML(){
-  var set={},ids=Object.keys(S.pubRotation).sort();
-  ids.forEach(function(m){Object.keys(S.pubRotation[m].assign).forEach(function(n){set[n]=1})});
-  var names=Object.keys(set).sort();
-  if(!names.length)return '<div class="empty-state"><h2>No rotation published yet</h2></div>';
-  var h='<div class="toolbar"><div class="field"><label for="pwho">Choose a lab technologist</label><select id="pwho" data-bind="pwho"><option value="">Select a name…</option>'+names.map(function(n){return '<option value="'+esc(n)+'"'+(S.pwho===n?' selected':'')+'>'+esc(n)+'</option>'}).join('')+'</select></div></div>';
-  if(!S.pwho||!set[S.pwho])return h+'<p class="note">Pick a name to see that person’s station each month. Other people are not shown.</p>';
-  var rows=ids.filter(function(m){return S.pubRotation[m].assign[S.pwho]}).map(function(m){return '<tr><td'+(m===S.mkey?' class="cur"':'')+'>'+esc(monthLabel(m))+'</td><td'+(m===S.mkey?' class="cur"':'')+'>'+esc(areaName(S.pubRotation[m].assign[S.pwho]))+'</td></tr>'}).join('');
-  return h+'<div class="tblwrap"><table class="ptable"><thead><tr><th>Month</th><th>Station</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
-}
 
 /* ---------- public view (what visitors see) ---------- */
 async function loadSnap(){
@@ -1406,13 +1396,13 @@ function pickPubPid(){
   var earlier=ids.filter(function(i){return i<=want});return earlier.length?earlier[earlier.length-1]:ids[0];
 }
 function publicHeaderHTML(){
-  var rt=S.sec==='routine',tabs=rt?[['st','Stations'],['person','By lab technologist']]:[['schedule','Schedule'],['table','Table'],['hours','Hours'],['mine','By lab technologist']];
+  var rt=S.sec==='routine',tabs=rt?[['st','Stations']]:[['schedule','Schedule'],['table','Table'],['hours','Hours'],['mine','By lab technologist']];
   return '<header><div class="brandline"><span><b>Bench Rota</b> · clinical laboratory shifts</span><span class="store">'+(S.pubAt?'Updated '+esc(fmtShort(S.pubAt.slice(0,10))):'')+'</span></div>'+
     secNavHTML()+(rt?monthNavHTML():'<div class="pnav"><button type="button" class="iconbtn" data-act="ppprev" aria-label="Previous period">'+ICON.prev+'</button>'+
     '<div class="plabel"><h1>'+esc(periodLabel(S.pid))+'</h1><div class="pmeta"><span>26th to 25th</span></div></div>'+
     '<button type="button" class="iconbtn" data-act="ppnext" aria-label="Next period">'+ICON.next+'</button></div>')+
     '<nav class="tabs" role="tablist" aria-label="Sections">'+tabs.map(function(t){
-      return '<button type="button" role="tab" class="tab" data-act="'+(rt?'prtab':'ptab')+'" data-tab="'+t[0]+'" aria-selected="'+((rt?S.prtab:S.ptab)===t[0])+'">'+t[1]+'</button>'}).join('')+'</nav></header>';
+      return rt?'<button type="button" role="tab" class="tab" aria-selected="true">'+t[1]+'</button>':'<button type="button" role="tab" class="tab" data-act="ptab" data-tab="'+t[0]+'" aria-selected="'+(S.ptab===t[0])+'">'+t[1]+'</button>'}).join('')+'</nav></header>';
 }
 function publicScheduleHTML(){
   var p=cur();if(!p)return emptyPeriodHTML();
@@ -1445,7 +1435,7 @@ function publicMineHTML(){
     return '<div class="mrow"><div class="mdate"><b>'+esc(fmtLong(s.date))+'</b>'+(s.holidayName?'<span class="chip accent">'+esc(s.holidayName)+'</span>':'')+'</div><div class="mono">'+s.startClock+'–'+s.endClock+(s.overnight?' <span class="muted">+1 day</span>':'')+'</div><div class="muted">'+esc(s.label)+'</div><div class="mono mh">'+s.hours+'h</div></div>'}).join('')+'</div>';
 }
 function renderPublic(){
-  var y=window.scrollY,body=S.sec==='routine'?(S.prtab==='person'?rotationPersonHTML():rotationStationsHTML()):S.ptab==='table'?tableTabHTML():(S.ptab==='hours'?hoursHTML():(S.ptab==='mine'?publicMineHTML():publicScheduleHTML()));
+  var y=window.scrollY,body=S.sec==='routine'?rotationStationsHTML():S.ptab==='table'?tableTabHTML():(S.ptab==='hours'?hoursHTML():(S.ptab==='mine'?publicMineHTML():publicScheduleHTML()));
   document.getElementById('modal-root').innerHTML='';
   document.getElementById('app').innerHTML=publicHeaderHTML()+'<main>'+body+'</main><footer class="pubfoot"><button type="button" class="link" data-act="go-admin">Admin sign in</button></footer>';
   window.scrollTo(0,y);
@@ -1677,7 +1667,6 @@ function restoreFrom(file){
 /* ---------- events ---------- */
 var ACT={
   ptab:function(el){S.ptab=el.dataset.tab;render()},
-  prtab:function(el){S.prtab=el.dataset.tab;render()},
   rtab:function(el){S.rtab=el.dataset.tab;render()},
   sec:function(el){S.sec=el.dataset.sec;render();window.scrollTo(0,0)},
   mprev:function(){S.mkey=addMonths(S.mkey,-1);render()},
@@ -1847,7 +1836,7 @@ var ACT={
 document.addEventListener('click',function(e){
   if(e.target.classList&&e.target.classList.contains('backdrop')){closeModal();return}
   var el=e.target.closest('[data-act]');if(!el)return;
-  var a=el.dataset.act,okp={'export-pdf':1,'export-routine-pdf':1,sec:1,prtab:1,mprev:1,mnext:1,ptab:1,ppprev:1,ppnext:1,'go-admin':1},okg={'vault-on':1,'retry-load':1,'gh-open':1,lock:1,login:1,'to-public':1,'request-open':1,'back-login':1,'have-code':1,'send-code':1,'verify-code':1,'save-pw':1,'cancel-pw':1,'save-token':1,'remove-token':1};
+  var a=el.dataset.act,okp={'export-pdf':1,'export-routine-pdf':1,sec:1,mprev:1,mnext:1,ptab:1,ppprev:1,ppnext:1,'go-admin':1},okg={'vault-on':1,'retry-load':1,'gh-open':1,lock:1,login:1,'to-public':1,'request-open':1,'back-login':1,'have-code':1,'send-code':1,'verify-code':1,'save-pw':1,'cancel-pw':1,'save-token':1,'remove-token':1};
   if(S.view==='public'&&!okp[a])return;
   if(S.view==='admin'&&S.gate!=='open'&&!okg[a])return;
   var f=ACT[a];if(f)f(el,e);
@@ -1862,7 +1851,6 @@ document.addEventListener('change',function(e){
   else if(b==='clear-pins'){S.clearPins=el.checked}
   else if(b==='hl'){S.hl=el.value;render()}
   else if(b==='who'){S.who=el.value;render()}
-  else if(b==='pwho'){S.pwho=el.value;render()}
   else if(b==='w-st'){var d4=S.modal.draft,ar=el.dataset.area,ix=d4.stations.indexOf(ar);if(el.checked&&ix<0)d4.stations.push(ar);if(!el.checked&&ix>=0)d4.stations.splice(ix,1);S.modal.err=null}
   else if(b==='ravail'){
     if(S.view!=='admin'||S.gate!=='open')return;
