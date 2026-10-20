@@ -1290,35 +1290,37 @@ function stationEntries(){
   return out.sort(function(a,b){return a.name.localeCompare(b.name)});
 }
 function stationTableHTML(entries){
-  return '<div class="tblwrap"><table class="ptable"><thead><tr><th>Lab technologist</th><th>Station and duties</th></tr></thead><tbody>'+
-    entries.map(function(e){return '<tr><td>'+esc(e.name)+'</td><td class="duties"><b>'+esc(areaName(e.area))+'</b> – '+esc(areaDuties(e.area).join(', '))+'</td></tr>'}).join('')+'</tbody></table></div>';
+  return '<div class="tblwrap"><table class="ptable"><thead><tr><th>Lab technologist</th><th>Station</th><th>Duties</th></tr></thead><tbody>'+
+    entries.map(function(e){return '<tr><td>'+esc(e.name)+'</td><td><b>'+esc(areaName(e.area))+'</b></td><td class="duties">'+esc(areaDuties(e.area).join(', '))+'</td></tr>'}).join('')+'</tbody></table></div>';
 }
 var HELV=[278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,278,278,584,584,584,556,1015,667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611,278,278,278,469,556,333,556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500,334,260,334,584];
 function pdfW(t,size,bold){var w=0;for(var i=0;i<t.length;i++){var c=t.charCodeAt(i);w+=(c>=32&&c<=126)?HELV[c-32]:556}return w*size/1000*(bold?1.08:1)}
 function routinePdfPages(entries){
-  var pages=[],c='',y=0,L=40,W1=170,W2=345,size=10,lead=13,bottom=60,n=0;
+  var pages=[],c='',y=0,L=40,X1=L+8,X2=L+150,X3=L+290,size=10,lead=13,bottom=60,n=0;
   function txt(x,yy,sz,bold,t,gray){return (gray!=null?gray+' g ':'0 g ')+'BT /'+(bold?'F2':'F1')+' '+sz+' Tf '+x+' '+yy+' Td ('+pdfText(t)+') Tj ET\n'}
   function rect(x,yy,w,h,r,g,b){return r+' '+g+' '+b+' rg '+x+' '+yy+' '+w+' '+h+' re f\n'}
   function line(x1,y1,x2,y2){return '0.82 G 0.5 w '+x1+' '+y1+' m '+x2+' '+y2+' l S\n'}
   function head(){
     c=txt(L,800,16,true,'Bench Rota – Routine')+txt(L,782,10,false,monthLabel(S.mkey)+' · Station assignments',0.35);
-    c+=rect(L,738,515,22,0.88,0.92,0.98)+txt(L+8,745,9,true,'LAB TECHNOLOGIST')+txt(L+W1+8,745,9,true,'STATION AND DUTIES');
+    c+=rect(L,738,515,22,0.88,0.92,0.98)+txt(X1,745,9,true,'LAB TECHNOLOGIST')+txt(X2,745,9,true,'STATION')+txt(X3,745,9,true,'DUTIES');
     y=738;
   }
-  function wrap(tokens,maxW){
-    var lines=[],cur=[],x=0,sp=pdfW(' ',size,false);
-    tokens.forEach(function(tk){var w=pdfW(tk.t,size,tk.b);if(cur.length&&x+sp+w>maxW){lines.push(cur);cur=[];x=0}if(cur.length)x+=sp;cur.push({t:tk.t,b:tk.b,x:x});x+=w});
-    if(cur.length)lines.push(cur);return lines;
+  function wrap(text,maxW,bold){
+    var words=text.split(' '),lines=[],cur='';
+    words.forEach(function(w){var t=cur?cur+' '+w:w;if(cur&&pdfW(t,size,bold)>maxW){lines.push(cur);cur=w}else cur=t});
+    if(cur)lines.push(cur);return lines;
   }
   head();
   entries.forEach(function(e){
-    var tokens=areaName(e.area).split(' ').map(function(w){return {t:w,b:true}}).concat([{t:'–',b:false}],areaDuties(e.area).join(', ').split(' ').map(function(w){return {t:w,b:false}}));
-    var lines=wrap(tokens,W2-16),h=lines.length*lead+10;
+    var nameL=wrap(e.name,130,false),stL=wrap(areaName(e.area),132,true),duL=wrap(areaDuties(e.area).join(', '),(L+515)-X3-8,false);
+    var rows=Math.max(nameL.length,stL.length,duL.length),h=rows*lead+10;
     if(y-h<bottom){pages.push(c);head()}
     var yB=y-h;
     if(n%2)c+=rect(L,yB,515,h,0.95,0.965,0.985);
-    c+=line(L,yB,555,yB)+txt(L+8,y-14,size,false,e.name);
-    lines.forEach(function(ln,li){ln.forEach(function(r){c+=txt(L+W1+8+r.x,y-14-li*lead,size,r.b,r.t)})});
+    c+=line(L,yB,555,yB);
+    nameL.forEach(function(t,k){c+=txt(X1,y-14-k*lead,size,false,t)});
+    stL.forEach(function(t,k){c+=txt(X2,y-14-k*lead,size,true,t)});
+    duL.forEach(function(t,k){c+=txt(X3,y-14-k*lead,size,false,t)});
     y=yB;n++;
   });
   pages.push(c);return pages;
@@ -1552,7 +1554,6 @@ function gateHTML(){
   function f(id,l,type,ac){return '<div class="field"><label for="'+id+'">'+l+'</label><input type="'+type+'" id="'+id+'" autocomplete="'+ac+'"></div>'}
   var back=lk('to-public','Back to public view');
   if(g==='loading')return '<div class="empty-state"><h2>Loading…</h2></div>';
-  if(g==='connect')return '<section class="step gate"><h2>Connect this device</h2><p class="note">Admin profiles and schedules are kept in your private data repository, so you can sign in from any device. Paste your GitHub token once on this device, then sign in with your email and password. No token yet? Ask the repository owner to add you as a collaborator on both repositories, then create your own fine-grained token (Contents: read and write).</p>'+f('tk','GitHub token','password','off')+err+'<button type="button" class="btn primary" data-act="connect-token">Connect</button>'+lk('to-public','Back to public view')+'</section>';
   if(g==='request')return '<section class="step gate"><h2>Request admin access</h2><p class="note">A one-time code is emailed to the approver. If they approve you, they will pass the code on to you.</p>'+f('nm','Your name','text','name')+f('em','Your email','text','email')+err+'<button type="button" class="btn primary" data-act="send-code">Send code to approver</button>'+(pendingOk()?lk('have-code','I already have a code'):'')+lk('back-login','Back to sign in')+'</section>';
   if(g==='verify')return '<section class="step gate"><h2>Enter your approval code</h2>'+(info||'<p class="note">Ask the approver for the code. It expires after '+CONFIG.codeMinutes+' minutes.</p>')+f('vc','Approval code','text','off')+f('pw1','Choose a password (12+ characters)','password','new-password')+f('pw2','Repeat password','password','new-password')+err+'<button type="button" class="btn primary" data-act="verify-code">Create my profile</button>'+lk('back-login','Back to sign in')+'</section>';
   if(g==='change')return '<section class="step gate"><h2>Change password</h2>'+f('pw0','Current password','password','current-password')+f('pw1','New password (12+ characters)','password','new-password')+f('pw2','Repeat new password','password','new-password')+err+'<div class="row"><button type="button" class="btn primary" data-act="save-pw">Save</button><button type="button" class="btn" data-act="cancel-pw">Cancel</button></div></section>';
@@ -1741,12 +1742,6 @@ var ACT={
     S.gate='open';S.gateErr=null;render();toast('Password changed.');
   },
   'gh-open':function(){S.gate='ghsetup';S.gateErr=null;render()},
-  'connect-token':function(){
-    var t=pwv('tk').trim();
-    if(!t){S.gateErr='Paste the token first.';render();return}
-    try{localStorage.setItem('benchrota:ghtoken',t)}catch(e){S.gateErr='This browser would not save the token.';render();return}
-    enterAdmin();
-  },
   'save-token':function(){
     var t=pwv('tk').trim();
     if(!t){S.gateErr='Paste the token first.';render();return}
@@ -1852,7 +1847,7 @@ var ACT={
 document.addEventListener('click',function(e){
   if(e.target.classList&&e.target.classList.contains('backdrop')){closeModal();return}
   var el=e.target.closest('[data-act]');if(!el)return;
-  var a=el.dataset.act,okp={'export-pdf':1,'export-routine-pdf':1,sec:1,prtab:1,mprev:1,mnext:1,ptab:1,ppprev:1,ppnext:1,'go-admin':1},okg={'vault-on':1,'connect-token':1,'retry-load':1,'gh-open':1,lock:1,login:1,'to-public':1,'request-open':1,'back-login':1,'have-code':1,'send-code':1,'verify-code':1,'save-pw':1,'cancel-pw':1,'save-token':1,'remove-token':1};
+  var a=el.dataset.act,okp={'export-pdf':1,'export-routine-pdf':1,sec:1,prtab:1,mprev:1,mnext:1,ptab:1,ppprev:1,ppnext:1,'go-admin':1},okg={'vault-on':1,'retry-load':1,'gh-open':1,lock:1,login:1,'to-public':1,'request-open':1,'back-login':1,'have-code':1,'send-code':1,'verify-code':1,'save-pw':1,'cancel-pw':1,'save-token':1,'remove-token':1};
   if(S.view==='public'&&!okp[a])return;
   if(S.view==='admin'&&S.gate!=='open'&&!okg[a])return;
   var f=ACT[a];if(f)f(el,e);
