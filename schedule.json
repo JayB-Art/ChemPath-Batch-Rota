@@ -1,5 +1,5 @@
 {
- "at": "2026-10-20T16:44:06.279Z",
+ "at": "2026-10-20T16:46:55.849Z",
  "periods": {
   "2026-10": {
    "id": "2026-10",
@@ -406,14 +406,14 @@
   "2026-10": {
    "id": "2026-10",
    "assign": {
-    "Jabari Brown": "mu",
-    "Shanay Clarke": "rc",
-    "Tiffaine Bassaragh": "uri",
-    "Lorriane Ferguson": "ver",
-    "Sikena Scott": "gl",
-    "Jahmeil Cocker": "sc",
-    "Janice Hunter-Thompson": "rec",
-    "Norman Holness": "rec"
+    "Jabari Brown": "rc",
+    "Jahmeil Cocker": "uri",
+    "Shanay Clarke": "rec",
+    "Tiffaine Bassaragh": "rec",
+    "Lorriane Ferguson": "sc",
+    "Sikena Scott": "mu",
+    "Janice Hunter-Thompson": "gl",
+    "Norman Holness": "ver"
    }
   }
  }
