@@ -212,6 +212,7 @@ input[type=checkbox]{width:1.15rem;height:1.15rem;accent-color:var(--accent);fle
 .tblwrap{overflow-x:auto;max-width:100%}
 .hol{display:inline-block;margin-left:.55rem;padding:.08rem .55rem;border-radius:99px;font-size:.72rem;font-weight:700;letter-spacing:.02em;background:var(--accent-soft);color:var(--accent);vertical-align:middle}
 .ptable td.num,.ptable th.num{text-align:right}
+.ptable td.duties{white-space:normal;min-width:18rem;line-height:1.45}
 .secnav{display:flex;gap:.5rem;margin:.4rem 0 1rem;flex-wrap:wrap}
 .secbtn{font:inherit;font-weight:700;padding:.5rem 1.1rem;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);cursor:pointer}
 .secbtn[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
@@ -520,7 +521,7 @@ function workerReasons(period,slots,worker,slot){
 'use strict';
 var S={ready:false,mode:'loading',roster:{workers:[],lastAvailable:[]},periods:{},pid:null,tab:'schedule',draft:null,
   modal:null,hl:'',undo:null,expanded:{},clearPins:false,
-  view:'public',pub:{},pubAt:null,ptab:'schedule',who:'',gate:'loading',gateErr:null,auth:null,unlocked:false,backendReady:false,remote:false,dataReady:false,sec:'emergency',rotation:{},pubRotation:{},rtab:'rot',prtab:'st',mkey:null,pwho:'',me:null,admins:[],pending:null,gateInfo:null};
+  view:'public',pub:{},pubAt:null,ptab:'schedule',who:'',gate:'loading',gateErr:null,auth:null,unlocked:false,backendReady:false,connected:false,remote:false,dataReady:false,sec:'emergency',rotation:{},pubRotation:{},rtab:'rot',prtab:'st',mkey:null,pwho:'',me:null,admins:[],pending:null,gateInfo:null};
 /* ===== SETTINGS: fill these in before use (see README) ===== */
 var CONFIG={
   approverEmail:'jabarigbrown@gmail.com',                 // the one address that receives approval codes
@@ -561,7 +562,7 @@ var REM={sha:null,data:null};
 function ghHeaders(){return {'Authorization':'Bearer '+ghToken(),'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'}}
 function dataUrl(){var d=CONFIG.data;return 'https://api.github.com/repos/'+d.owner+'/'+d.repo+'/contents/'+d.path}
 function b64d(x){return decodeURIComponent(escape(atob(String(x).replace(/\s/g,''))))}
-function isRemotePath(path){return path==='settings/roster'||path.indexOf('periods/')===0||path.indexOf('rotation/')===0}
+function isRemotePath(path){return path==='settings/roster'||path==='settings/admins'||path.indexOf('periods/')===0||path.indexOf('rotation/')===0}
 function ghMsg(e){
   var st=e&&e.status;
   if(st===401)return 'GitHub rejected the token. Check it under GitHub connection.';
@@ -619,7 +620,7 @@ async function bootData(){
 function persist(path,data){
   var snap=clone(data);
   writeChain=writeChain.then(function(){
-    if(S.remote&&isRemotePath(path))return remoteWrite(function(d){if(path==='settings/roster')d.roster=snap;else if(path.indexOf('rotation/')===0){d.rotation=d.rotation||{};d.rotation[path.slice(9)]=snap}else d.periods[path.slice(8)]=snap});
+    if(S.remote&&isRemotePath(path))return remoteWrite(function(d){if(path==='settings/roster')d.roster=snap;else if(path==='settings/admins')d.admins=snap.admins;else if(path.indexOf('rotation/')===0){d.rotation=d.rotation||{};d.rotation[path.slice(9)]=snap}else d.periods[path.slice(8)]=snap});
     return DB?DB.doc(path).set(snap):lsSet(path,snap);
   }).catch(function(err){
     try{console.error(err)}catch(e){}
@@ -661,7 +662,7 @@ function headerHTML(){
   var rt=S.sec==='routine',tabs=rt?[['rot','Rotation'],['hist','History'],['team','Team']]:[['schedule','Schedule'],['table','Table'],['hours','Hours'],['stats','Statistics'],['setup','Setup'],['team','Team']];
   if(rt)status='';
   return '<header>'+
-    '<div class="brandline"><span><b>Bench Rota</b> · admin</span><span class="store">'+store+(S.me?' · Signed in as '+esc(meName()):'')+'</span><span class="row" style="gap:.4rem;letter-spacing:0;text-transform:none"><button type="button" class="btn small primary" data-act="publish">Publish schedule</button><button type="button" class="btn small" data-act="download-json">Download file</button><button type="button" class="btn small" data-act="backup">Backup</button><button type="button" class="btn small" data-act="restore">Restore</button><input type="file" id="restore-file" data-bind="restore-file" accept=".json,application/json" hidden><button type="button" class="btn small" data-act="change-pw-open">Password</button><button type="button" class="btn small" data-act="gh-open">Publishing setup</button><button type="button" class="btn small" data-act="lock">Sign out</button></span></div>'+
+    '<div class="brandline"><span><b>Bench Rota</b> · admin</span><span class="store">'+store+(S.me?' · Signed in as '+esc(meName()):'')+'</span><span class="row" style="gap:.4rem;letter-spacing:0;text-transform:none"><button type="button" class="btn small primary" data-act="publish">Publish schedule</button><button type="button" class="btn small" data-act="download-json">Download file</button><button type="button" class="btn small" data-act="backup">Backup</button><button type="button" class="btn small" data-act="restore">Restore</button><input type="file" id="restore-file" data-bind="restore-file" accept=".json,application/json" hidden><button type="button" class="btn small" data-act="change-pw-open">Password</button><button type="button" class="btn small" data-act="vault-open">Other devices</button><button type="button" class="btn small" data-act="gh-open">Publishing setup</button><button type="button" class="btn small" data-act="lock">Sign out</button></span></div>'+
     secNavHTML()+(rt?monthNavHTML():'<div class="pnav"><button type="button" class="iconbtn" data-act="pprev" aria-label="Previous period">'+ICON.prev+'</button>'+
     '<div class="plabel"><h1>'+esc(periodLabel(S.pid))+'</h1><div class="pmeta"><span>26th to 25th</span>'+status+'</div></div>'+
     '<button type="button" class="iconbtn" data-act="pnext" aria-label="Next period">'+ICON.next+'</button></div>')+
@@ -1186,10 +1187,19 @@ function exportStatsXlsx(){
 }
 
 /* ---------- Routine: monthly station rotation ---------- */
-var AREAS=[['rec','Reception','Reception'],['rc','Routine Chemistry - C503','Routine Chem'],['sc','Special Chemistry - E802','Special Chem'],['gl','Glucose - C503 Sub','Glucose'],['ver','Verification','Verification'],['uri','Urinalysis','Urinalysis'],['mu','Manual Urine Chemistry','Manual Urine']];
+var AREAS=[
+  ['rec','Reception','Reception',['Specimen Reception','Centrifuge Maintenance','Fecal Fats']],
+  ['rc','Routine Chemistry','Routine Chem',['c503/c303','Water Charts','Reagent Inventory Updates','Maintenance Sheets']],
+  ['sc','Special Chemistry','Special Chem',['e801/c402','Reagent Inventory Updates','Temperature Charts','Maintenance Sheets']],
+  ['gl','Glucose','Glucose',['Glucose','HDL/LDL','Lithium','Salicylate','Micro-albumin','Spectrophotometry Maintenance Charts','Routine Chemistry Assistance']],
+  ['uri','Urinalysis','Urinalysis',['Urinalysis','Immunoglobulin Quantification','Myoglobin','Protein Electrophoresis','Urine Total Proteins','CSF Total Protein','Microscope Maintenance']],
+  ['mu','Manual Urine Chemistry','Manual Urine',['VMA','5HIAA','Ketosteroids','Renal Stones','Fecal Occult Blood','Water Bath Maintenance']],
+  ['ver','Verification','Verification',['Monitoring of QC Charts','Temperature Charts','Proficiency Testing','LIS Verification','Accreditation Preparation']]
+];
 var MONF=['January','February','March','April','May','June','July','August','September','October','November','December'];
 function areaName(id){for(var i=0;i<AREAS.length;i++)if(AREAS[i][0]===id)return AREAS[i][1];return '—'}
 function areaShort(id){for(var i=0;i<AREAS.length;i++)if(AREAS[i][0]===id)return AREAS[i][2];return '—'}
+function areaDuties(id){for(var i=0;i<AREAS.length;i++)if(AREAS[i][0]===id)return AREAS[i][3];return []}
 function monthLabel(k){return MONF[+k.slice(5,7)-1]+' '+k.slice(0,4)}
 function monthIdx(k){return +k.slice(0,4)*12+ +k.slice(5,7)}
 function addMonths(k,n){var m=+k.slice(5,7)-1+n,y=+k.slice(0,4)+Math.floor(m/12);m=((m%12)+12)%12;return y+'-'+('0'+(m+1)).slice(-2)}
@@ -1268,6 +1278,56 @@ function stationSummary(byArea){
   return '<div class="tblwrap"><table class="ptable"><thead><tr><th>Station</th><th>Lab technologists</th><th class="num">People</th></tr></thead><tbody>'+
     AREAS.map(function(a){var l=(byArea[a[0]]||[]).slice().sort();return '<tr><td>'+esc(a[1])+'</td><td>'+(l.length?esc(l.join(', ')):'<span class="chip warn">No one assigned</span>')+'</td><td class="num mono">'+l.length+'</td></tr>'}).join('')+'</tbody></table></div>';
 }
+function stationEntries(){
+  var out=[];
+  if(S.view==='public'){
+    var pr=S.pubRotation[S.mkey];
+    if(pr)Object.keys(pr.assign).forEach(function(n){out.push({name:n,area:pr.assign[n]})});
+  }else{
+    var r=S.rotation[S.mkey],byId={};S.roster.workers.forEach(function(w){byId[w.id]=w.name});
+    if(r)Object.keys(r.assign||{}).forEach(function(id){if(byId[id]&&r.assign[id])out.push({name:byId[id],area:r.assign[id]})});
+  }
+  return out.sort(function(a,b){return a.name.localeCompare(b.name)});
+}
+function stationTableHTML(entries){
+  return '<div class="tblwrap"><table class="ptable"><thead><tr><th>Lab technologist</th><th>Station and duties</th></tr></thead><tbody>'+
+    entries.map(function(e){return '<tr><td>'+esc(e.name)+'</td><td class="duties"><b>'+esc(areaName(e.area))+'</b> – '+esc(areaDuties(e.area).join(', '))+'</td></tr>'}).join('')+'</tbody></table></div>';
+}
+var HELV=[278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,278,278,584,584,584,556,1015,667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611,278,278,278,469,556,333,556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500,334,260,334,584];
+function pdfW(t,size,bold){var w=0;for(var i=0;i<t.length;i++){var c=t.charCodeAt(i);w+=(c>=32&&c<=126)?HELV[c-32]:556}return w*size/1000*(bold?1.08:1)}
+function routinePdfPages(entries){
+  var pages=[],c='',y=0,L=40,W1=170,W2=345,size=10,lead=13,bottom=60,n=0;
+  function txt(x,yy,sz,bold,t,gray){return (gray!=null?gray+' g ':'0 g ')+'BT /'+(bold?'F2':'F1')+' '+sz+' Tf '+x+' '+yy+' Td ('+pdfText(t)+') Tj ET\n'}
+  function rect(x,yy,w,h,r,g,b){return r+' '+g+' '+b+' rg '+x+' '+yy+' '+w+' '+h+' re f\n'}
+  function line(x1,y1,x2,y2){return '0.82 G 0.5 w '+x1+' '+y1+' m '+x2+' '+y2+' l S\n'}
+  function head(){
+    c=txt(L,800,16,true,'Bench Rota – Routine')+txt(L,782,10,false,monthLabel(S.mkey)+' · Station assignments',0.35);
+    c+=rect(L,738,515,22,0.88,0.92,0.98)+txt(L+8,745,9,true,'LAB TECHNOLOGIST')+txt(L+W1+8,745,9,true,'STATION AND DUTIES');
+    y=738;
+  }
+  function wrap(tokens,maxW){
+    var lines=[],cur=[],x=0,sp=pdfW(' ',size,false);
+    tokens.forEach(function(tk){var w=pdfW(tk.t,size,tk.b);if(cur.length&&x+sp+w>maxW){lines.push(cur);cur=[];x=0}if(cur.length)x+=sp;cur.push({t:tk.t,b:tk.b,x:x});x+=w});
+    if(cur.length)lines.push(cur);return lines;
+  }
+  head();
+  entries.forEach(function(e){
+    var tokens=areaName(e.area).split(' ').map(function(w){return {t:w,b:true}}).concat([{t:'–',b:false}],areaDuties(e.area).join(', ').split(' ').map(function(w){return {t:w,b:false}}));
+    var lines=wrap(tokens,W2-16),h=lines.length*lead+10;
+    if(y-h<bottom){pages.push(c);head()}
+    var yB=y-h;
+    if(n%2)c+=rect(L,yB,515,h,0.95,0.965,0.985);
+    c+=line(L,yB,555,yB)+txt(L+8,y-14,size,false,e.name);
+    lines.forEach(function(ln,li){ln.forEach(function(r){c+=txt(L+W1+8+r.x,y-14-li*lead,size,r.b,r.t)})});
+    y=yB;n++;
+  });
+  pages.push(c);return pages;
+}
+function exportRoutinePdf(){
+  var en=stationEntries();if(!en.length){toast('There are no station assignments to export.');return}
+  saveBlob('Bench-Rota-Routine-'+S.mkey+'.pdf',makePdf(routinePdfPages(en)),'application/pdf');
+  toast('PDF downloaded.');
+}
 function rotationHTML(){
   var k=S.mkey,r=S.rotation[k]||{assign:{}},prev=S.rotation[addMonths(k,-1)],pa=(prev&&prev.assign)||{};
   var ws=S.roster.workers.slice().sort(byName);
@@ -1284,7 +1344,9 @@ function rotationHTML(){
   return '<div class="toolbar"><span class="note">Each lab technologist works one station for the whole calendar month. <span class="chip'+(recN===2?'':' warn')+'">Reception '+recN+' of 2</span></span><span class="row">'+(Object.keys(r.away||{}).length?'<button type="button" class="btn small" data-act="ravall">Everyone available</button>':'')+'<button type="button" class="btn small primary" data-act="rbuild">Build rotation</button><button type="button" class="btn small danger" data-act="rclear">Clear month</button></span></div>'+
     '<div class="tblwrap"><table class="ptable"><thead><tr><th>Available · Lab technologist</th><th>Station for '+esc(monthLabel(k))+'</th><th>Last month</th><th>Allowed</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
     (out.length?'<p class="note" style="margin-top:.8rem">Not in the rotation (no stations allowed): '+esc(out.map(function(w){return w.name}).join(', '))+'.</p>':'')+
-    '<h3 class="wk">By station</h3>'+stationSummary(byArea)+
+    '<h3 class="wk">Station assignments</h3>'+
+    (function(){var un=AREAS.filter(function(a){return !(byArea[a[0]]||[]).length}).map(function(a){return a[1]});return un.length?'<p class="note"><span class="chip warn">No one assigned</span> '+esc(un.join(', '))+'</p>':''})()+
+    '<div class="tbltools"><button type="button" class="btn small primary" data-act="export-routine-pdf">Export PDF</button></div>'+stationTableHTML(stationEntries())+
     '<p class="note" style="margin-top:.8rem">Untick anyone who is not available this month; they are left out of the build. Build rotation puts exactly 2 people on Reception, never repeats a person’s station from last month, keeps every other station covered where it can, and only uses allowed stations. Anything you choose by hand is kept when you rebuild and may repeat last month’s station. Use Clear month to start over. Click <b>Publish schedule</b> to show it on the public page.</p>';
 }
 function rotationHistoryHTML(){
@@ -1316,8 +1378,7 @@ function pickPubMonth(){
 function rotationStationsHTML(){
   var r=S.pubRotation[S.mkey];
   if(!r)return '<div class="empty-state"><h2>No rotation published for '+esc(monthLabel(S.mkey))+' yet</h2><p>Please check back once it has been published.</p></div>';
-  var by={};Object.keys(r.assign).forEach(function(n){(by[r.assign[n]]=by[r.assign[n]]||[]).push(n)});
-  return stationSummary(by);
+  return '<div class="tbltools"><button type="button" class="btn small primary" data-act="export-routine-pdf">Export PDF</button></div>'+stationTableHTML(stationEntries());
 }
 function rotationPersonHTML(){
   var set={},ids=Object.keys(S.pubRotation).sort();
@@ -1396,20 +1457,109 @@ function newCode(){var a='ABCDEFGHJKMNPQRSTUVWXYZ23456789',b=new Uint8Array(8);c
 function meName(){var a=(S.admins||[]).filter(function(x){return x.id===S.me})[0];return a?a.name:''}
 function mailReady(){var c=CONFIG.emailjs;return !!(CONFIG.approverEmail&&c.serviceId&&c.templateId&&c.publicKey)}
 function pendingOk(){return !!(S.pending&&S.pending.exp>Date.now())}
-function loadAdmins(){var d=lsGet('settings/admins');S.admins=(d&&d.admins)||[];S.pending=lsGet('settings/pending')}
+async function loadAdmins(){
+  S.pending=lsGet('settings/pending');
+  var ld=lsGet('settings/admins'),local=(ld&&ld.admins)||[];
+  if(!ghToken()){S.admins=local;S.connected=false;return 'notoken'}
+  try{
+    var cur=await remoteFetch();
+    if(cur.exists){REM.sha=cur.sha;REM.data=cur.data;S.admins=cur.data.admins||[]}
+    else{S.admins=[]}
+    S.remote=true;
+    if(!cur.exists){
+      /* first time: copy everything saved in this browser into the private data repository */
+      REM.sha=null;REM.data=null;var sr=clone(S.roster),sp=clone(S.periods),st=clone(S.rotation);S.admins=local.slice();
+      await remoteWrite(function(d){d.roster=sr;d.periods=sp;d.rotation=st;d.admins=local.slice()});
+    }else if(!S.admins.length&&local.length){
+      S.admins=local.slice();await remoteWrite(function(d){d.admins=local.slice()});
+    }
+    S.connected=true;return 'ok';
+  }catch(e){S.gateErr=ghMsg(e);S.connected=false;S.remote=false;return 'error'}
+}
 function saveAdmins(){return persist('settings/admins',{admins:S.admins})}
+/* ---------- sign in from any device: the GitHub token is sealed with the admin's password ---------- */
+var VAULT_ITER=600000;
+function bytesToB64(u){var x='';for(var i=0;i<u.length;i++)x+=String.fromCharCode(u[i]);return btoa(x)}
+function b64ToBytes(b){var x=atob(b),u=new Uint8Array(x.length);for(var i=0;i<x.length;i++)u[i]=x.charCodeAt(i);return u}
+async function vaultKey(pw,saltB64,iter){
+  var base=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt:b64ToBytes(saltB64),iterations:iter,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+}
+async function vaultSeal(pw,payload){
+  var salt=bytesToB64(crypto.getRandomValues(new Uint8Array(16))),iv=crypto.getRandomValues(new Uint8Array(12)),key=await vaultKey(pw,salt,VAULT_ITER);
+  var ct=await crypto.subtle.encrypt({name:'AES-GCM',iv:iv},key,new TextEncoder().encode(JSON.stringify(payload)));
+  return {salt:salt,iv:bytesToB64(iv),iter:VAULT_ITER,ct:bytesToB64(new Uint8Array(ct))};
+}
+async function vaultOpen(pw,e){
+  var key=await vaultKey(pw,e.salt,e.iter),pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:b64ToBytes(e.iv)},key,b64ToBytes(e.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+async function vaultUpsert(entry){
+  var g=CONFIG.github,url='https://api.github.com/repos/'+g.owner+'/'+g.repo+'/contents/admin-vault.json';
+  for(var att=0;att<3;att++){
+    var r=await fetch(url+'?ref='+encodeURIComponent(g.branch),{headers:ghHeaders(),cache:'no-store'}),fsha=null,data={v:1,entries:[]};
+    if(r.ok){var j=await r.json();fsha=j.sha;try{data=JSON.parse(b64d(j.content))}catch(e){}}else if(r.status!==404)throw {status:r.status};
+    data.entries=(data.entries||[]).filter(function(x){return x.eh!==entry.eh}).concat([entry]);
+    var body={message:'Update admin sign-in vault',content:b64(JSON.stringify(data)),branch:g.branch};if(fsha)body.sha=fsha;
+    var w=await fetch(url,{method:'PUT',headers:Object.assign({'Content-Type':'application/json'},ghHeaders()),body:JSON.stringify(body)});
+    if(w.ok)return;if(w.status===409||w.status===422)continue;throw {status:w.status};
+  }
+  throw {status:409};
+}
+var VAULT_POLL=10000;
+async function vaultPresent(eh){
+  try{var r=await fetch('admin-vault.json?'+Date.now(),{cache:'no-store'});if(!r.ok)return false;var v=await r.json();return (v.entries||[]).some(function(x){return x.eh===eh})}catch(e){return false}
+}
+async function vaultWatch(eh,tries){
+  for(var i=0;i<tries;i++){await new Promise(function(r){setTimeout(r,VAULT_POLL)});if(await vaultPresent(eh)){toast('Other-device sign-in is live. You can now sign in on any device with your email and password.');return}}
+  toast('Other-device sign-in was saved, but the site has not published it yet. Give it a few minutes, then try a new device.');
+}
+function vaultSyncSoon(a,pw,force){
+  if(pw.length<12){toast('Use a password of 12 or more characters (Password button) to sign in from other devices without a token.');return}
+  (async function(){
+    try{
+      var th=await sha(ghToken()),eh=await sha('vault:'+a.email),key='benchrota:vault:'+a.email,done=null;
+      try{done=localStorage.getItem(key)}catch(e){}
+      if(!force&&done===th&&await vaultPresent(eh))return;
+      var entry=await vaultSeal(pw,{token:ghToken(),id:a.id,name:a.name});entry.eh=eh;
+      await vaultUpsert(entry);
+      try{localStorage.setItem(key,th)}catch(e){}
+      toast('Turning on other-device sign-in… this takes about a minute.');
+      await vaultWatch(eh,12);
+    }catch(e){toast('Could not turn on other-device sign-in: '+ghMsg(e))}
+  })();
+}
+async function vaultLogin(em,pw){
+  S.gateErr=null;
+  var delay=function(){return new Promise(function(r){setTimeout(r,700)})},bad='Incorrect email or password, or other-device sign-in is not turned on for this account yet. Sign in once on a device with a GitHub token to turn it on.';
+  var entry=null,pl=null;
+  try{
+    var r=await fetch('admin-vault.json',{cache:'no-store'});if(!r.ok)throw 0;
+    var v=await r.json(),eh=await sha('vault:'+em);entry=(v.entries||[]).filter(function(x){return x.eh===eh})[0];if(!entry)throw 0;
+    pl=await vaultOpen(pw,entry);
+  }catch(e){await delay();S.gateErr=bad;render();return}
+  try{localStorage.setItem('benchrota:ghtoken',pl.token)}catch(e){S.gateErr='This browser would not save the sign-in. Allow site data and try again.';render();return}
+  S.gate='loading';render();
+  var st=await loadAdmins();
+  if(st!=='ok'){S.gate='dataerror';render();return}
+  var a=S.admins.filter(function(x){return x.email===em})[0];
+  if(!a||(await sha(a.salt+pw))!==a.hash){S.gateErr=bad;S.gate='login';render();return}
+  S.me=a.id;unlock();
+}
 function gateHTML(){
   var g=S.gate,err=S.gateErr?'<div class="err">'+esc(S.gateErr)+'</div>':'',info=S.gateInfo?'<p class="note">'+esc(S.gateInfo)+'</p>':'';
   function lk(a,t){return '<button type="button" class="link" data-act="'+a+'" style="align-self:flex-start">'+t+'</button>'}
   function f(id,l,type,ac){return '<div class="field"><label for="'+id+'">'+l+'</label><input type="'+type+'" id="'+id+'" autocomplete="'+ac+'"></div>'}
   var back=lk('to-public','Back to public view');
   if(g==='loading')return '<div class="empty-state"><h2>Loading…</h2></div>';
+  if(g==='connect')return '<section class="step gate"><h2>Connect this device</h2><p class="note">Admin profiles and schedules are kept in your private data repository, so you can sign in from any device. Paste your GitHub token once on this device, then sign in with your email and password. No token yet? Ask the repository owner to add you as a collaborator on both repositories, then create your own fine-grained token (Contents: read and write).</p>'+f('tk','GitHub token','password','off')+err+'<button type="button" class="btn primary" data-act="connect-token">Connect</button>'+lk('to-public','Back to public view')+'</section>';
   if(g==='request')return '<section class="step gate"><h2>Request admin access</h2><p class="note">A one-time code is emailed to the approver. If they approve you, they will pass the code on to you.</p>'+f('nm','Your name','text','name')+f('em','Your email','text','email')+err+'<button type="button" class="btn primary" data-act="send-code">Send code to approver</button>'+(pendingOk()?lk('have-code','I already have a code'):'')+lk('back-login','Back to sign in')+'</section>';
-  if(g==='verify')return '<section class="step gate"><h2>Enter your approval code</h2>'+(info||'<p class="note">Ask the approver for the code. It expires after '+CONFIG.codeMinutes+' minutes.</p>')+f('vc','Approval code','text','off')+f('pw1','Choose a password (8+ characters)','password','new-password')+f('pw2','Repeat password','password','new-password')+err+'<button type="button" class="btn primary" data-act="verify-code">Create my profile</button>'+lk('back-login','Back to sign in')+'</section>';
-  if(g==='change')return '<section class="step gate"><h2>Change password</h2>'+f('pw0','Current password','password','current-password')+f('pw1','New password (8+ characters)','password','new-password')+f('pw2','Repeat new password','password','new-password')+err+'<div class="row"><button type="button" class="btn primary" data-act="save-pw">Save</button><button type="button" class="btn" data-act="cancel-pw">Cancel</button></div></section>';
+  if(g==='verify')return '<section class="step gate"><h2>Enter your approval code</h2>'+(info||'<p class="note">Ask the approver for the code. It expires after '+CONFIG.codeMinutes+' minutes.</p>')+f('vc','Approval code','text','off')+f('pw1','Choose a password (12+ characters)','password','new-password')+f('pw2','Repeat password','password','new-password')+err+'<button type="button" class="btn primary" data-act="verify-code">Create my profile</button>'+lk('back-login','Back to sign in')+'</section>';
+  if(g==='change')return '<section class="step gate"><h2>Change password</h2>'+f('pw0','Current password','password','current-password')+f('pw1','New password (12+ characters)','password','new-password')+f('pw2','Repeat new password','password','new-password')+err+'<div class="row"><button type="button" class="btn primary" data-act="save-pw">Save</button><button type="button" class="btn" data-act="cancel-pw">Cancel</button></div></section>';
+  if(g==='vaultpw')return '<section class="step gate"><h2>Sign in from other devices</h2><p class="note">Enter your password to turn on (or refresh) sign-in with just your email and password on any device. Your password must be 12 or more characters.</p>'+f('pw0','Your password','password','current-password')+err+'<div class="row"><button type="button" class="btn primary" data-act="vault-on">Turn on</button><button type="button" class="btn" data-act="cancel-pw">Cancel</button></div></section>';
   if(g==='ghsetup')return '<section class="step gate"><h2>GitHub connection</h2>'+info+'<p class="note">Schedules are saved to the private repository <b>'+esc(CONFIG.data.owner+'/'+CONFIG.data.repo)+'</b> and published to <b>'+esc(CONFIG.github.owner+'/'+CONFIG.github.repo)+'</b>. Paste a GitHub fine-grained token that covers both repositories with Contents set to read and write. It is kept in this browser only.</p>'+(ghToken()?'<p class="note">A token is already saved in this browser.</p>':'')+f('tk','GitHub token','password','off')+err+'<div class="row"><button type="button" class="btn primary" data-act="save-token">Save token</button>'+(ghToken()?'<button type="button" class="btn danger" data-act="remove-token">Remove token</button>':'')+'<button type="button" class="btn" data-act="cancel-pw">Cancel</button></div></section>';
   if(g==='dataerror')return '<section class="step gate"><h2>Could not load schedules</h2><p class="note">'+esc(S.gateErr||'')+'</p><div class="row"><button type="button" class="btn primary" data-act="retry-load">Try again</button><button type="button" class="btn" data-act="gh-open">GitHub connection</button><button type="button" class="btn" data-act="lock">Sign out</button></div></section>';
-  return '<section class="step gate"><h2>Admin sign in</h2>'+(S.admins.length?'':'<p class="note">No admin profiles exist yet. Request access to create the first one.</p>')+f('em','Email','text','username')+f('pw1','Password','password','current-password')+err+'<button type="button" class="btn primary" data-act="login">Sign in</button>'+lk('request-open','Request admin access')+back+'</section>';
+  return '<section class="step gate"><h2>Admin sign in</h2>'+(ghToken()?(S.admins.length?'':'<p class="note">No admin profiles exist yet. Request access to create the first one.</p>'):'<p class="note">Sign in with your email and password. First time on this site? Use a GitHub token to set up the first admin.</p>')+f('em','Email','text','username')+f('pw1','Password','password','current-password')+err+'<button type="button" class="btn primary" data-act="login">Sign in</button>'+(ghToken()?lk('request-open','Request admin access'):lk('gh-open','First-time setup with a GitHub token'))+back+'</section>';
 }
 function renderGate(){
   document.getElementById('modal-root').innerHTML='';
@@ -1475,7 +1625,9 @@ async function enterAdmin(){
   S.view='admin';S.gate='loading';S.gateErr=null;S.gateInfo=null;render();
   try{sessionStorage.setItem('benchrota:admin','1')}catch(e){}
   if(!S.backendReady)await initBackend();
-  loadAdmins();
+  var st=await loadAdmins();
+  if(st==='notoken'){S.gate='login';render();return}
+  if(st==='error'){S.gate='dataerror';render();return}
   var me=null;try{me=sessionStorage.getItem('benchrota:me')}catch(e){}
   if(me&&S.admins.some(function(x){return x.id===me})){S.me=me;unlock();return}
   S.gate='login';render();
@@ -1539,10 +1691,11 @@ var ACT={
   lock:function(){S.unlocked=false;S.me=null;S.dataReady=false;S.remote=false;try{sessionStorage.removeItem('benchrota:me')}catch(e){}leaveAdmin()},
   login:async function(){
     var em=pwv('em').trim().toLowerCase(),pw=pwv('pw1');
+    if(!ghToken()){await vaultLogin(em,pw);return}
     var a=S.admins.filter(function(x){return x.email===em})[0];
     var ok=a&&(await sha(a.salt+pw))===a.hash;
     if(!ok){await new Promise(function(r){setTimeout(r,700)});S.gateErr='Incorrect email or password.';render();return}
-    S.me=a.id;unlock();
+    S.me=a.id;vaultSyncSoon(a,pw);unlock();
   },
   'request-open':function(){S.gate='request';S.gateErr=null;S.gateInfo=null;render()},
   'back-login':function(){S.gate='login';S.gateErr=null;S.gateInfo=null;render()},
@@ -1565,7 +1718,8 @@ var ACT={
   'verify-code':async function(){
     var code=pwv('vc').trim().toUpperCase().replace(/\s+/g,''),a=pwv('pw1'),b=pwv('pw2'),pd=S.pending;
     if(!pendingOk()){S.pending=null;persist('settings/pending',null);S.gateErr='That code has expired. Request a new one.';render();return}
-    if(a.length<8){S.gateErr='Use at least 8 characters for the password.';render();return}
+    if(!S.remote){S.gateErr='Connect with a GitHub token first (First-time setup on the sign-in screen).';render();return}
+    if(a.length<12){S.gateErr='Use at least 12 characters for the password.';render();return}
     if(a!==b){S.gateErr='The two passwords do not match.';render();return}
     if((await sha(pd.salt+code))!==pd.hash){
       pd.tries=(pd.tries||0)+1;
@@ -1575,33 +1729,48 @@ var ACT={
     var salt=uid(),prof={id:uid(),name:pd.name,email:pd.email,salt:salt,hash:await sha(salt+a),at:new Date().toISOString()};
     S.admins.push(prof);await saveAdmins();
     S.pending=null;persist('settings/pending',null);
-    S.me=prof.id;unlock();toast('Welcome, '+prof.name+'. Your admin profile is ready.');
+    S.me=prof.id;vaultSyncSoon(prof,a);unlock();toast('Welcome, '+prof.name+'. Your admin profile is ready.');
   },
   'save-pw':async function(){
     var o=pwv('pw0'),a=pwv('pw1'),b=pwv('pw2'),m=S.admins.filter(function(x){return x.id===S.me})[0];
     if(!m)return;
     if((await sha(m.salt+o))!==m.hash){S.gateErr='Current password is incorrect.';render();return}
-    if(a.length<8){S.gateErr='Use at least 8 characters.';render();return}
+    if(a.length<12){S.gateErr='Use at least 12 characters.';render();return}
     if(a!==b){S.gateErr='The two new passwords do not match.';render();return}
-    m.salt=uid();m.hash=await sha(m.salt+a);await saveAdmins();
+    m.salt=uid();m.hash=await sha(m.salt+a);await saveAdmins();vaultSyncSoon(m,a,true);
     S.gate='open';S.gateErr=null;render();toast('Password changed.');
   },
-  'gh-open':function(){if(!S.me)return;S.gate='ghsetup';S.gateErr=null;render()},
+  'gh-open':function(){S.gate='ghsetup';S.gateErr=null;render()},
+  'connect-token':function(){
+    var t=pwv('tk').trim();
+    if(!t){S.gateErr='Paste the token first.';render();return}
+    try{localStorage.setItem('benchrota:ghtoken',t)}catch(e){S.gateErr='This browser would not save the token.';render();return}
+    enterAdmin();
+  },
   'save-token':function(){
-    var t=pwv('tk').trim();if(!S.me)return;
+    var t=pwv('tk').trim();
     if(!t){S.gateErr='Paste the token first.';render();return}
     try{localStorage.setItem('benchrota:ghtoken',t)}catch(e){S.gateErr='This browser would not save the token.';render();return}
     S.gateErr=null;
+    if(!S.me||!S.unlocked){enterAdmin();return}
     if(!S.dataReady){bootData();return}
     S.gate='open';render();toast('Token saved in this browser.');
   },
-  'remove-token':function(){try{localStorage.removeItem('benchrota:ghtoken')}catch(e){}S.gate=S.dataReady?'open':'ghsetup';S.gateErr=null;render();toast('Token removed.')},
-  'retry-load':function(){if(S.me)bootData()},
+  'remove-token':function(){try{localStorage.removeItem('benchrota:ghtoken')}catch(e){}S.gateErr=null;if(!S.me||!S.unlocked){enterAdmin();return}S.gate=S.dataReady?'open':'ghsetup';render();toast('Token removed.')},
+  'retry-load':function(){if(S.me&&S.unlocked)bootData();else enterAdmin()},
   'download-json':function(){publishPublic()},
+  'vault-open':function(){S.gate='vaultpw';S.gateErr=null;render()},
+  'vault-on':async function(){
+    var m=S.admins.filter(function(x){return x.id===S.me})[0],pw=pwv('pw0');if(!m)return;
+    if((await sha(m.salt+pw))!==m.hash){S.gateErr='Incorrect password.';render();return}
+    if(pw.length<12){S.gateErr='Your password is shorter than 12 characters. Change it first with the Password button.';render();return}
+    S.gate='open';S.gateErr=null;render();vaultSyncSoon(m,pw,true);
+  },
   'change-pw-open':function(){S.gate='change';S.gateErr=null;render()},
-  'cancel-pw':function(){S.gate=S.dataReady?'open':'dataerror';S.gateErr=S.dataReady?null:'Schedules are not loaded yet. Add a token and try again.';render()},
+  'cancel-pw':function(){if(S.dataReady){S.gate='open';S.gateErr=null;render()}else if(S.me&&S.unlocked){S.gate='dataerror';S.gateErr='Schedules are not loaded yet. Add a token and try again.';render()}else enterAdmin()},
   publish:function(){if(S.me)publishToGitHub()},
   'export-pdf':function(){exportTablePdf()},
+  'export-routine-pdf':function(){exportRoutinePdf()},
   'export-stats':function(){if(S.me)exportStatsXlsx()},
   backup:function(){backupAll()},
   restore:function(){var f=document.getElementById('restore-file');if(f)f.click()},
@@ -1683,7 +1852,7 @@ var ACT={
 document.addEventListener('click',function(e){
   if(e.target.classList&&e.target.classList.contains('backdrop')){closeModal();return}
   var el=e.target.closest('[data-act]');if(!el)return;
-  var a=el.dataset.act,okp={'export-pdf':1,sec:1,prtab:1,mprev:1,mnext:1,ptab:1,ppprev:1,ppnext:1,'go-admin':1},okg={'retry-load':1,'gh-open':1,lock:1,login:1,'to-public':1,'request-open':1,'back-login':1,'have-code':1,'send-code':1,'verify-code':1,'save-pw':1,'cancel-pw':1,'save-token':1,'remove-token':1};
+  var a=el.dataset.act,okp={'export-pdf':1,'export-routine-pdf':1,sec:1,prtab:1,mprev:1,mnext:1,ptab:1,ppprev:1,ppnext:1,'go-admin':1},okg={'vault-on':1,'connect-token':1,'retry-load':1,'gh-open':1,lock:1,login:1,'to-public':1,'request-open':1,'back-login':1,'have-code':1,'send-code':1,'verify-code':1,'save-pw':1,'cancel-pw':1,'save-token':1,'remove-token':1};
   if(S.view==='public'&&!okp[a])return;
   if(S.view==='admin'&&S.gate!=='open'&&!okg[a])return;
   var f=ACT[a];if(f)f(el,e);
